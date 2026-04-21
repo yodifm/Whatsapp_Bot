@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/xampp/php/**)",
+      "Read(//c/ProgramData/ComposerSetup/**)",
+      "Read(//c/Users/**)",
+      "Read(//c/Yodi/**)",
+      "Bash(/c/xampp/php/php.exe c:/Yodi/composer.phar require guzzlehttp/guzzle --working-dir=c:/Yodi/Coding/WA_Bot)",
+      "Bash(/c/xampp/php/php.exe \"c:/Yodi/Coding/WA_Bot/../composer.phar\" require guzzlehttp/guzzle --working-dir=\"c:/Yodi/Coding/WA_Bot\")",
+      "Bash(/c/xampp/php/php.exe -r \"require 'c:/Yodi/Coding/WA_Bot/vendor/autoload.php'; echo class_exists\\('GuzzleHttp\\\\Client'\\) ? 'Guzzle: OK' : 'Guzzle: NOT FOUND';\")",
+      "Bash(rsync -av --exclude=node_modules --exclude=vendor --exclude=.claude c:/Yodi/Coding/WA_Bot/ c:/Yodi/Coding/DATA_INTEGRATION_PROJECT/backend/)",
+      "Bash(robocopy \"c:\\\\Yodi\\\\Coding\\\\WA_Bot\" \"c:\\\\Yodi\\\\Coding\\\\DATA_INTEGRATION_PROJECT\\\\backend\" /E /XD node_modules vendor .claude /XF \"*.log\" /NP /NJS)",
+      "Bash(robocopy \"c:\\\\Yodi\\\\Coding\\\\WA_Bot\" \"c:\\\\Yodi\\\\Coding\\\\DATA_INTEGRATION_PROJECT\\\\backend\" /E /XD \"node_modules\" \"vendor\" \".claude\" /NP)"
+    ]
+  }
+}
