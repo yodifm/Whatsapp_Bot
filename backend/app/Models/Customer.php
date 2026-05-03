@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Customer extends Model
 {
-    protected $fillable = ['whatsapp_id', 'nama', 'status', 'ai_paused', 'last_followup_at'];
+    protected $fillable = ['whatsapp_id', 'nama', 'email', 'no_whatsapp', 'status', 'ai_paused', 'last_followup_at'];
 
     protected $casts = [
         'last_followup_at' => 'datetime',

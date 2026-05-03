@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from 'react';
 import api from '@/api/axios';
 
 function Message({ msg }) {
-    const isUser = msg.role === 'user';
+    const isUser  = msg.role === 'user';
     const isError = msg.role === 'error';
 
     if (isError) {
@@ -19,13 +19,35 @@ function Message({ msg }) {
         );
     }
 
+    const AiAvatar = () => (
+        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-[10px] font-bold mr-2 flex-shrink-0 self-end mb-1 shadow-sm">
+            AI
+        </div>
+    );
+
+    // Pricelist image message
+    if (msg.role === 'pricelist') {
+        return (
+            <div className="flex justify-start mb-4">
+                <AiAvatar />
+                <div className="max-w-[72%] flex flex-col items-start">
+                    <div className="bg-white rounded-2xl rounded-bl-md border border-gray-100 shadow-sm overflow-hidden">
+                        <img src={msg.imageUrl} alt="Pricelist"
+                            className="w-full max-w-xs object-contain cursor-pointer hover:opacity-95 transition"
+                            onClick={() => window.open(msg.imageUrl, '_blank')} />
+                        <div className="px-3 py-2 text-sm text-gray-700 border-t border-gray-100">
+                            {msg.content}
+                        </div>
+                    </div>
+                    <span className="text-[11px] text-gray-400 mt-1 px-1">{msg.time}</span>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
-            {!isUser && (
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-[10px] font-bold mr-2 flex-shrink-0 self-end mb-1 shadow-sm">
-                    AI
-                </div>
-            )}
+            {!isUser && <AiAvatar />}
             <div className={`max-w-[72%] flex flex-col ${isUser ? 'items-end' : 'items-start'}`}>
                 <div className={`px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap break-words shadow-sm ${
                     isUser
@@ -98,7 +120,20 @@ export default function TestAI() {
 
         try {
             const r = await api.post('/test-ai', { message: msg, history });
-            setMessages(prev => [...prev, { role: 'assistant', content: r.data.reply, time: now() }]);
+            const newMsgs = [];
+
+            // Show pricelist image first if lead was just saved
+            if (r.data.pricelist_url) {
+                newMsgs.push({
+                    role:     'pricelist',
+                    content:  'Berikut pricelist kami, apabila ada pertanyaan silakan yaa kak☺️',
+                    imageUrl: r.data.pricelist_url,
+                    time:     now(),
+                });
+            }
+
+            newMsgs.push({ role: 'assistant', content: r.data.reply, time: now() });
+            setMessages(prev => [...prev, ...newMsgs]);
         } catch (err) {
             const errMsg = err.response?.data?.error || 'Gagal menghubungi AI. Pastikan API Key sudah diset di Settings.';
             setMessages(prev => [...prev, { role: 'error', content: errMsg }]);

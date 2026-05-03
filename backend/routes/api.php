@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\BookingFormController;
 use App\Http\Controllers\Backend\AnalyticsController;
 use App\Http\Controllers\Backend\AuthController;
 use App\Http\Controllers\Backend\BookingController;
@@ -7,6 +8,7 @@ use App\Http\Controllers\Backend\BroadcastController;
 use App\Http\Controllers\Backend\CustomerController;
 use App\Http\Controllers\Backend\DashboardController;
 use App\Http\Controllers\Backend\FaqController;
+use App\Http\Controllers\Backend\DiscountController;
 use App\Http\Controllers\Backend\GalleryController;
 use App\Http\Controllers\Backend\InvoiceController;
 use App\Http\Controllers\Backend\NotificationController;
@@ -19,6 +21,10 @@ use Illuminate\Support\Facades\Route;
 // WhatsApp webhook (public)
 Route::get('/webhook/whatsapp',  [WhatsAppController::class, 'verify']);
 Route::post('/webhook/whatsapp', [WhatsAppController::class, 'handle']);
+
+// Public booking form
+Route::get('/booking-form/packages', [BookingFormController::class, 'packages']);
+Route::post('/booking-form',         [BookingFormController::class, 'store']);
 
 // Auth
 Route::post('/login', [AuthController::class, 'login']);
@@ -57,11 +63,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/notifications', [NotificationController::class, 'poll']);
 
     // Bookings / Calendar
-    Route::get('/bookings/booked-dates', [BookingController::class, 'bookedDates']);
-    Route::get('/bookings',              [BookingController::class, 'index']);
-    Route::post('/bookings',             [BookingController::class, 'store']);
-    Route::put('/bookings/{booking}',    [BookingController::class, 'update']);
-    Route::delete('/bookings/{booking}', [BookingController::class, 'destroy']);
+    Route::get('/bookings/booked-dates',          [BookingController::class, 'bookedDates']);
+    Route::get('/bookings/form-submissions',       [BookingController::class, 'formSubmissions']);
+    Route::patch('/bookings/{booking}/form-status',[BookingController::class, 'updateFormStatus']);
+    Route::get('/bookings',                        [BookingController::class, 'index']);
+    Route::post('/bookings',                       [BookingController::class, 'store']);
+    Route::put('/bookings/{booking}',              [BookingController::class, 'update']);
+    Route::delete('/bookings/{booking}',           [BookingController::class, 'destroy']);
 
     // Invoice PDF
     Route::get('/bookings/{booking}/invoice',         [InvoiceController::class, 'download']);
@@ -78,4 +86,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/gallery',             [GalleryController::class, 'store']);
     Route::put('/gallery/{gallery}',    [GalleryController::class, 'update']);
     Route::delete('/gallery/{gallery}', [GalleryController::class, 'destroy']);
+
+    // Discounts
+    Route::get('/discounts',               [DiscountController::class, 'index']);
+    Route::post('/discounts',              [DiscountController::class, 'store']);
+    Route::put('/discounts/{discount}',    [DiscountController::class, 'update']);
+    Route::delete('/discounts/{discount}', [DiscountController::class, 'destroy']);
 });

@@ -40,4 +40,23 @@ class WhatsAppService
             ],
         ]);
     }
+
+    public function sendImage(string $to, string $imageUrl, string $caption = ''): void
+    {
+        $this->client->post("/v19.0/{$this->phoneNumberId}/messages", [
+            'headers' => [
+                'Authorization' => "Bearer {$this->accessToken}",
+                'Content-Type'  => 'application/json',
+            ],
+            'json' => [
+                'messaging_product' => 'whatsapp',
+                'to'                => $to,
+                'type'              => 'image',
+                'image'             => [
+                    'link'    => $imageUrl,
+                    'caption' => $caption,
+                ],
+            ],
+        ]);
+    }
 }

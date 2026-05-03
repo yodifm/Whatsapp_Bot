@@ -33,6 +33,55 @@ class BookingController extends Controller
         ]));
     }
 
+    public function formSubmissions(Request $request): JsonResponse
+    {
+        $query = Booking::with(['customer', 'package'])
+            ->whereNotNull('frame')
+            ->orderByDesc('created_at');
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->filled('search')) {
+            $s = $request->search;
+            $query->where(function ($q) use ($s) {
+                $q->where('no_whatsapp', 'like', "%$s%")
+                  ->orWhere('nama_acara', 'like', "%$s%")
+                  ->orWhereHas('customer', fn($q2) => $q2->where('nama', 'like', "%$s%"));
+            });
+        }
+
+        return response()->json($query->get()->map(fn($b) => [
+            'id'                => $b->id,
+            'customer'          => ['id' => $b->customer->id, 'nama' => $b->customer->nama],
+            'package'           => $b->package ? ['id' => $b->package->id, 'nama' => $b->package->nama] : null,
+            'no_whatsapp'       => $b->no_whatsapp,
+            'email'             => $b->email,
+            'tanggal'           => $b->tanggal->format('Y-m-d'),
+            'jam_mulai'         => $b->jam_mulai,
+            'nama_acara'        => $b->nama_acara,
+            'lokasi'            => $b->catatan,
+            'frame'             => $b->frame,
+            'warna_backdrop'    => $b->warna_backdrop,
+            'status'            => $b->status,
+            'syarat_venue'      => $b->syarat_venue,
+            'syarat_pembayaran' => $b->syarat_pembayaran,
+            'created_at'        => $b->created_at->format('Y-m-d H:i'),
+        ]));
+    }
+
+    public function updateFormStatus(Request $request, Booking $booking): JsonResponse
+    {
+        $validated = $request->validate([
+            'status' => 'required|in:pending,confirmed,dp_paid,completed,cancelled',
+        ]);
+
+        $booking->update($validated);
+
+        return response()->json(['status' => $booking->status]);
+    }
+
     public function bookedDates(): JsonResponse
     {
         $dates = Booking::whereNotIn('status', ['cancelled'])

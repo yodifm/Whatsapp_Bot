@@ -2,8 +2,11 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from '@/context/AuthContext';
 import PrivateRoute from '@/components/PrivateRoute';
 import Login from '@/Pages/Login';
+import BookingForm from '@/Pages/BookingForm';
+import FormBookings from '@/Pages/backend/FormBookings';
 import Analytics from '@/Pages/backend/Analytics';
 import Bookings from '@/Pages/backend/Bookings';
+import Discounts from '@/Pages/backend/Discounts';
 import Broadcast from '@/Pages/backend/Broadcast';
 import Dashboard from '@/Pages/backend/Dashboard';
 import Faqs from '@/Pages/backend/Faqs';
@@ -17,7 +20,8 @@ export default function App() {
         <AuthProvider>
             <BrowserRouter>
                 <Routes>
-                    <Route path="/login" element={<Login />} />
+                    <Route path="/login"   element={<Login />} />
+                    <Route path="/booking" element={<BookingForm />} />
                     <Route path="/"          element={<PrivateRoute><Dashboard /></PrivateRoute>} />
                     <Route path="/settings"  element={<PrivateRoute><Settings /></PrivateRoute>} />
                     <Route path="/packages"  element={<PrivateRoute><Packages /></PrivateRoute>} />
@@ -26,7 +30,9 @@ export default function App() {
                     <Route path="/test-ai"   element={<PrivateRoute><TestAI /></PrivateRoute>} />
                     <Route path="/bookings"  element={<PrivateRoute><Bookings /></PrivateRoute>} />
                     <Route path="/faqs"      element={<PrivateRoute><Faqs /></PrivateRoute>} />
-                    <Route path="/gallery"   element={<PrivateRoute><Gallery /></PrivateRoute>} />
+                    <Route path="/discounts" element={<PrivateRoute><Discounts /></PrivateRoute>} />
+                    <Route path="/gallery"        element={<PrivateRoute><Gallery /></PrivateRoute>} />
+                    <Route path="/form-bookings" element={<PrivateRoute><FormBookings /></PrivateRoute>} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
             </BrowserRouter>

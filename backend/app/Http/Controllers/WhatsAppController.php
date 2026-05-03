@@ -84,14 +84,52 @@ class WhatsAppController extends Controller
             $history  = $customer->chatHistories()
                 ->latest()->take(50)->get()->reverse()->values()->toArray();
 
-            $packages = Package::where('aktif', true)->get()->toArray();
-            $faqs     = Faq::where('aktif', true)->orderBy('urutan')->get()->toArray();
+            $packages  = Package::where('aktif', true)->get()->toArray();
+            $faqs      = Faq::where('aktif', true)->orderBy('urutan')->get()->toArray();
+            $discounts = \App\Models\Discount::where('aktif', true)
+                ->where('berlaku_sampai', '>=', now()->toDateString())
+                ->get()->map(fn($d) => [
+                    'nama'           => $d->nama,
+                    'label'          => $d->label,
+                    'berlaku_sampai' => $d->berlaku_sampai->format('d M Y'),
+                ])->toArray();
             $bookedDates = \App\Models\Booking::whereNotIn('status', ['cancelled'])
                 ->pluck('tanggal')
                 ->map(fn($d) => $d->format('Y-m-d'))
                 ->unique()->values()->toArray();
 
-            $aiReply = $this->ai->getReply($userText, $history, $packages, $faqs, $bookedDates);
+            $rawReply = $this->ai->getReply($userText, $history, $packages, $faqs, $bookedDates, $discounts);
+
+            ['reply' => $aiReply, 'lead' => $lead] = $this->ai->extractLeadData($rawReply);
+
+            // Save lead data when AI collected all form fields
+            if ($lead && ! empty($lead['nama'])) {
+                $customer->update(['nama' => $lead['nama'], 'status' => 'interested']);
+                if (! empty($lead['tanggal'])) {
+                    \App\Models\Booking::updateOrCreate(
+                        ['customer_id' => $customer->id, 'status' => 'pending'],
+                        [
+                            'tanggal'    => $lead['tanggal'],
+                            'nama_acara' => $lead['acara'] ?? null,
+                            'catatan'    => isset($lead['lokasi']) ? 'Lokasi: ' . $lead['lokasi'] : null,
+                        ],
+                    );
+                }
+
+                // Send pricelist image after form complete
+                $pricelistUrl = url('images/pricelist.jpg');
+                $this->wa->sendImage(
+                    $waId,
+                    $pricelistUrl,
+                    "Berikut pricelist kami, apabila ada pertanyaan silakan yaa kak☺️"
+                );
+
+                ChatHistory::create([
+                    'customer_id' => $customer->id,
+                    'role'        => 'assistant',
+                    'content'     => '[Pricelist dikirim]',
+                ]);
+            }
 
             $this->wa->sendText($waId, $aiReply);
 
