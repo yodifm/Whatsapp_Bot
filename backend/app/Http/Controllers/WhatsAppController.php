@@ -8,6 +8,7 @@ use App\Models\Faq;
 use App\Models\Package;
 use App\Models\Setting;
 use App\Services\AIService;
+use App\Services\InvoiceService;
 use App\Services\WhatsAppService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -18,6 +19,7 @@ class WhatsAppController extends Controller
     public function __construct(
         private AIService       $ai,
         private WhatsAppService $wa,
+        private InvoiceService  $invoiceService,
     ) {}
 
     // ─── GET /webhook/whatsapp ────────────────────────────────────────────────
@@ -193,19 +195,59 @@ class WhatsAppController extends Controller
             // Step 3: Send to Claude Vision for transfer verification
             $result = $this->ai->verifyTransferImage($base64, $mimeType, $caption);
 
-            // Step 4: If verified, update status to dp_paid
+            // Step 4: If verified, update status to dp_paid and send invoice
             if ($result['verified']) {
-                // Update or create booking dp_amount
                 $latestBooking = $customer->bookings()
                     ->whereNotIn('status', ['cancelled', 'completed'])
                     ->latest()
                     ->first();
 
                 if ($latestBooking) {
+                    // Calculate dp_amount: use AI-detected amount or 50% of package price
+                    $dpAmount = $result['amount'];
+                    if (! $dpAmount && $latestBooking->package) {
+                        $dpAmount = (int) ($latestBooking->package->harga * 0.5);
+                    }
+
                     $latestBooking->update([
-                        'dp_amount' => $result['amount'] ?? $latestBooking->dp_amount,
+                        'dp_amount' => $dpAmount ?? $latestBooking->dp_amount,
                         'status'    => 'dp_paid',
                     ]);
+
+                    $customer->update(['status' => 'booked']);
+
+                    // Send confirmation message first
+                    $this->wa->sendText($waId, $result['reply']);
+
+                    ChatHistory::create([
+                        'customer_id' => $customer->id,
+                        'role'        => 'assistant',
+                        'content'     => $result['reply'],
+                    ]);
+
+                    // Generate and send DP invoice
+                    try {
+                        $invoiceUrl  = $this->invoiceService->generateDpInvoice($latestBooking->fresh(['customer', 'package']));
+                        $invoicePath = public_path(parse_url($invoiceUrl, PHP_URL_PATH));
+                        $filename    = 'Invoice-DP-' . str($latestBooking->customer->nama)->slug() . '.pdf';
+
+                        $this->wa->sendDocument(
+                            $waId,
+                            $invoicePath,
+                            $filename,
+                            "Invoice DP booking kamu sudah siap ya kak! Simpan sebagai bukti pembayaran 📄"
+                        );
+
+                        ChatHistory::create([
+                            'customer_id' => $customer->id,
+                            'role'        => 'assistant',
+                            'content'     => '[Invoice DP dikirim: ' . $filename . ']',
+                        ]);
+                    } catch (Throwable $invoiceErr) {
+                        logger()->error('Invoice send error', ['message' => $invoiceErr->getMessage()]);
+                    }
+
+                    return;
                 }
 
                 $customer->update(['status' => 'booked']);
