@@ -77,13 +77,21 @@ class AIService
      */
     public function verifyTransferImage(string $base64Image, string $mimeType, string $caption = ''): array
     {
-        $studioName = Setting::get('studio_name') ?: 'Studio Foto';
-        $aiName     = Setting::get('ai_name')     ?: 'Nadia';
+        $studioName        = Setting::get('studio_name')         ?: 'Studio Foto';
+        $aiName            = Setting::get('ai_name')             ?: 'Nadia';
+        $bankAccountHolder = Setting::get('bank_account_holder') ?: '';
+        $bankAccountNumber = Setting::get('bank_account_number') ?: '';
+        $bankName          = Setting::get('bank_name')           ?: '';
+
+        $rekeningInfo = ($bankName && $bankAccountNumber)
+            ? "Rekening tujuan yang benar: {$bankName} no. {$bankAccountNumber} a/n {$bankAccountHolder}"
+            : '';
 
         $prompt = <<<PROMPT
 Kamu adalah AI dari {$studioName} bernama {$aiName}.
 
 Customer mengirim sebuah gambar dengan caption: "{$caption}"
+{$rekeningInfo}
 
 Tugasmu: Analisa apakah gambar ini adalah bukti transfer / pembayaran DP yang valid.
 
@@ -95,9 +103,10 @@ Kembalikan HANYA JSON dalam format ini, tanpa teks lain:
   "reply": "pesan balasan kepada customer dalam bahasa Indonesia yang hangat"
 }
 
-Jika bukti transfer valid:
-- Ucapkan terima kasih, konfirmasi nominal yang terlihat, dan info bahwa tim akan memverifikasi segera
-- reply: "Terima kasih Kak! Bukti transfer sebesar Rp X sudah kami terima 🎉 Tim kami akan segera verifikasi dan booking Kakak akan dikonfirmasi. Mohon tunggu konfirmasi dari admin ya Kak 🙏"
+Jika bukti transfer valid (nominal terlihat, ada info pengirim/penerima):
+- is_transfer_proof: true
+- Baca nominal yang tertera, isi di field "amount"
+- reply: "Makasih Kak! Bukti transfer Rp [nominal] sudah kami terima 🎉 Invoice DP-nya langsung kami kirimkan ya kak, simpan sebagai bukti booking 📄"
 
 Jika BUKAN bukti transfer (foto biasa, screenshot lain, dll):
 - is_transfer_proof: false
@@ -186,9 +195,31 @@ PROMPT;
             $slotSection = "\n=== TANGGAL SUDAH TERPESAN ===\n{$dates}\nJangan konfirmasi slot untuk tanggal-tanggal di atas. Tawarkan tanggal alternatif.\n==============================\n";
         }
 
-        $aiName     = Setting::get('ai_name')     ?: 'Nadia';
-        $studioName = Setting::get('studio_name') ?: 'Photobooth Studio';
-        $tone       = Setting::get('ai_tone')     ?: 'sales';
+        $aiName            = Setting::get('ai_name')            ?: 'Nadia';
+        $studioName        = Setting::get('studio_name')        ?: 'Photobooth Studio';
+        $tone              = Setting::get('ai_tone')            ?: 'sales';
+        $bankName          = Setting::get('bank_name')          ?: '';
+        $bankAccountNumber = Setting::get('bank_account_number') ?: '';
+        $bankAccountHolder = Setting::get('bank_account_holder') ?: '';
+
+        $bankSection = '';
+        if ($bankName && $bankAccountNumber) {
+            $bankSection = <<<BANK
+
+━━━ INFO PEMBAYARAN DP ━━━
+Kalau customer sudah siap bayar DP, beritahu rekening berikut:
+- Bank       : {$bankName}
+- No. Rek    : {$bankAccountNumber}
+- Atas Nama  : {$bankAccountHolder}
+
+Cara sampaikannya (natural, tidak copy-paste):
+"Transfer DPnya ke {$bankName} ya kak, no rek {$bankAccountNumber} a/n {$bankAccountHolder} 😊 Setelah transfer, kirim bukti transfernya ke sini ya biar langsung aku proseskan"
+
+Setelah customer kirim bukti transfer, sistem akan otomatis verifikasi dan kirim invoice. Kamu tidak perlu konfirmasi manual.
+━━━━━━━━━━━━━━━━━━━━━━━━━
+
+BANK;
+        }
 
         $toneDesc = match ($tone) {
             'friendly' => 'sangat ramah, santai, dan bersahabat seperti teman dekat. Fokus pada membangun hubungan dulu sebelum jualan.',
@@ -276,6 +307,7 @@ Setelah kirim link, follow up: "Kalau ada yang mau ditanyain soal formnya atau a
 - Pelunasan dilakukan maksimal H-1 acara
 - Design custom frame maksimal 3x revisi
 Kalau customer tanya soal DP atau pembayaran, jelaskan sesuai info di atas dengan bahasa santai.
+{$bankSection}
 
 ━━━ BATASAN ━━━
 - Jangan bahas topik di luar photobooth & studio

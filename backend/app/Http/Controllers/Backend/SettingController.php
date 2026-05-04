@@ -20,6 +20,9 @@ class SettingController extends Controller
         'ai_name',
         'studio_name',
         'ai_tone',
+        'bank_name',
+        'bank_account_number',
+        'bank_account_holder',
     ];
 
     public function index(): JsonResponse
@@ -49,6 +52,9 @@ class SettingController extends Controller
             'ai_name'             => 'nullable|string|max:50',
             'studio_name'         => 'nullable|string|max:100',
             'ai_tone'             => 'nullable|in:sales,friendly,formal',
+            'bank_name'           => 'nullable|string|max:100',
+            'bank_account_number' => 'nullable|string|max:50',
+            'bank_account_holder' => 'nullable|string|max:100',
         ]);
 
         foreach ($validated as $key => $value) {

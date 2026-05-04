@@ -25,9 +25,12 @@ class InvoiceService
         $path     = $dir . DIRECTORY_SEPARATOR . $filename;
 
         $pdf = Pdf::loadView('invoices.booking', [
-            'booking'     => $booking,
-            'studioName'  => Setting::get('studio_name') ?: 'Poonya Bot Photobooth',
-            'invoiceType' => 'dp',
+            'booking'            => $booking,
+            'studioName'         => Setting::get('studio_name')         ?: 'Poonya Bot Photobooth',
+            'bankName'           => Setting::get('bank_name')           ?: '',
+            'bankAccountNumber'  => Setting::get('bank_account_number') ?: '',
+            'bankAccountHolder'  => Setting::get('bank_account_holder') ?: '',
+            'invoiceType'        => 'dp',
         ])->setPaper('a4');
 
         $pdf->save($path);

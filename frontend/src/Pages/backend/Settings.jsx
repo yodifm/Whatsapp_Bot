@@ -99,6 +99,9 @@ export default function Settings() {
         ai_name:              'Nadia',
         studio_name:          'Photobooth Studio',
         ai_tone:              'sales',
+        bank_name:            '',
+        bank_account_number:  '',
+        bank_account_holder:  '',
     });
     const [errors, setErrors]         = useState({});
     const [processing, setProcessing] = useState(false);
@@ -117,6 +120,9 @@ export default function Settings() {
                 ai_name:              r.data.ai_name               || 'Nadia',
                 studio_name:          r.data.studio_name           || 'Photobooth Studio',
                 ai_tone:              r.data.ai_tone               || 'sales',
+                bank_name:            r.data.bank_name             || '',
+                bank_account_number:  r.data.bank_account_number   || '',
+                bank_account_holder:  r.data.bank_account_holder   || '',
             });
         });
     }, []);
@@ -356,6 +362,61 @@ export default function Settings() {
                                             {data.followup_message}
                                         </div>
                                     </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Bank Account Section */}
+                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                        <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-500 flex items-center justify-center">
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 className="text-sm font-semibold text-gray-900">Rekening Pembayaran</h3>
+                                <p className="text-xs text-gray-400 mt-0.5">Rekening yang ditampilkan di invoice dan diberitahu AI ke customer saat bayar DP.</p>
+                            </div>
+                        </div>
+                        <div className="px-5 py-5 space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Nama Bank</label>
+                                    <input
+                                        value={data.bank_name}
+                                        onChange={e => handleChange('bank_name', e.target.value)}
+                                        placeholder="BCA / Mandiri / BNI / GoPay..."
+                                        className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1.5">No. Rekening</label>
+                                    <input
+                                        value={data.bank_account_number}
+                                        onChange={e => handleChange('bank_account_number', e.target.value)}
+                                        placeholder="1234567890"
+                                        className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-400 transition"
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1.5">Atas Nama</label>
+                                <input
+                                    value={data.bank_account_holder}
+                                    onChange={e => handleChange('bank_account_holder', e.target.value)}
+                                    placeholder="Nama pemilik rekening"
+                                    className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition"
+                                />
+                            </div>
+                            {data.bank_name && data.bank_account_number && (
+                                <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm">
+                                    <p className="text-amber-700 font-medium text-xs uppercase tracking-wide mb-2">Preview di Invoice & Chat AI</p>
+                                    <p className="text-gray-800">
+                                        Transfer ke <strong>{data.bank_name}</strong> · <span className="font-mono font-bold">{data.bank_account_number}</span>
+                                        {data.bank_account_holder && <> · a/n <strong>{data.bank_account_holder}</strong></>}
+                                    </p>
                                 </div>
                             )}
                         </div>

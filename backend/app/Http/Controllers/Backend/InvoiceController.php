@@ -18,8 +18,12 @@ class InvoiceController extends Controller
         $studioName = Setting::where('key', 'studio_name')->value('value') ?? 'Studio Foto';
 
         $pdf = Pdf::loadView('invoices.booking', [
-            'booking'    => $booking,
-            'studioName' => $studioName,
+            'booking'           => $booking,
+            'studioName'        => $studioName,
+            'bankName'          => Setting::where('key', 'bank_name')->value('value')           ?? '',
+            'bankAccountNumber' => Setting::where('key', 'bank_account_number')->value('value') ?? '',
+            'bankAccountHolder' => Setting::where('key', 'bank_account_holder')->value('value') ?? '',
+            'invoiceType'       => $booking->status === 'dp_paid' ? 'dp' : 'full',
         ])->setPaper('a4');
 
         $filename = 'invoice-' . $booking->id . '-' . str($booking->customer->nama)->slug() . '.pdf';
@@ -34,8 +38,12 @@ class InvoiceController extends Controller
         $studioName = Setting::where('key', 'studio_name')->value('value') ?? 'Studio Foto';
 
         $pdf = Pdf::loadView('invoices.booking', [
-            'booking'    => $booking,
-            'studioName' => $studioName,
+            'booking'           => $booking,
+            'studioName'        => $studioName,
+            'bankName'          => Setting::where('key', 'bank_name')->value('value')           ?? '',
+            'bankAccountNumber' => Setting::where('key', 'bank_account_number')->value('value') ?? '',
+            'bankAccountHolder' => Setting::where('key', 'bank_account_holder')->value('value') ?? '',
+            'invoiceType'       => $booking->status === 'dp_paid' ? 'dp' : 'full',
         ])->setPaper('a4');
 
         return $pdf->stream('invoice-preview.pdf');

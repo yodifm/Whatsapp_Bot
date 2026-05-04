@@ -209,6 +209,35 @@
     </div>
     @endif
 
+    {{-- Bank account for remaining payment --}}
+    @php $sisa2 = max(0, ($booking->package ? $booking->package->harga : 0) - ($booking->dp_amount ?? 0)); @endphp
+    @if($sisa2 > 0 && !empty($bankName ?? '') && !empty($bankAccountNumber ?? ''))
+    <div style="background:#fffbeb; border:1px solid #fde68a; border-radius:6px; padding:14px 16px; margin-bottom:24px;">
+        <div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:#b45309; margin-bottom:8px;">
+            💳 Transfer Sisa Pelunasan ke:
+        </div>
+        <div style="display:flex; gap:24px; font-size:13px;">
+            <div>
+                <div style="color:#92400e; font-size:10px; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:3px;">Bank</div>
+                <div style="font-weight:700; color:#1f2937;">{{ $bankName }}</div>
+            </div>
+            <div>
+                <div style="color:#92400e; font-size:10px; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:3px;">No. Rekening</div>
+                <div style="font-weight:700; color:#1f2937; font-size:15px; letter-spacing:1px;">{{ $bankAccountNumber }}</div>
+            </div>
+            @if(!empty($bankAccountHolder ?? ''))
+            <div>
+                <div style="color:#92400e; font-size:10px; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:3px;">Atas Nama</div>
+                <div style="font-weight:700; color:#1f2937;">{{ $bankAccountHolder }}</div>
+            </div>
+            @endif
+        </div>
+        <div style="margin-top:8px; font-size:11px; color:#92400e;">
+            Sisa pelunasan <strong>Rp {{ number_format($sisa2, 0, ',', '.') }}</strong> paling lambat H-1 sebelum acara.
+        </div>
+    </div>
+    @endif
+
     {{-- Payment terms --}}
     <div class="terms">
         <div class="terms-title">Syarat Pembayaran</div>
