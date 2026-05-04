@@ -138,7 +138,7 @@ export default function BookingForm() {
                         📸
                     </div>
                     <div>
-                        <p className="text-white/60 text-xs font-medium tracking-widest uppercase">Poonya Bot</p>
+                        <p className="text-white/60 text-xs font-medium tracking-widest uppercase">Waktunya Photobooth</p>
                         <h1 className="text-white text-2xl font-bold mt-1">Form Penyewaan Photobooth</h1>
                         <p className="text-white/50 text-sm mt-1">Isi data dengan lengkap dan benar ya 😊</p>
                     </div>
@@ -507,7 +507,7 @@ function SuccessPage() {
                     </p>
                     <div className="rounded-2xl px-5 py-4 text-sm"
                         style={{ background: 'linear-gradient(135deg, #7c3aed15, #4f46e515)', border: '1px solid #7c3aed30' }}>
-                        <p className="font-bold text-violet-700">📸 Poonya Bot Photobooth</p>
+                        <p className="font-bold text-violet-700">📸 Waktunya Photobooth</p>
                         <p className="text-violet-500 text-xs mt-0.5">Photobooth terbaik untuk momen spesialmu</p>
                     </div>
                 </div>

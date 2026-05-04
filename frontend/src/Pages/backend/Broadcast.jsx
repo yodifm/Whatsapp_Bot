@@ -17,7 +17,7 @@ const TEMPLATES = [
     },
     {
         label: 'Follow-up Lunak',
-        text: 'Halo Kak 😊 Masih ingat dengan kami? Kami dari Photobooth Studio siap bantu Kakak abadikan momen spesial. Ada yang bisa kami bantu?',
+        text: 'Halo Kak 😊 Masih ingat dengan kami? Kami dari Waktunya Photobooth siap bantu Kakak abadikan momen spesial. Ada yang bisa kami bantu?',
     },
     {
         label: 'Pengumuman Paket Baru',

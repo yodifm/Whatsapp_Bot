@@ -26,7 +26,7 @@ class InvoiceService
 
         $pdf = Pdf::loadView('invoices.booking', [
             'booking'            => $booking,
-            'studioName'         => Setting::get('studio_name')         ?: 'Poonya Bot Photobooth',
+            'studioName'         => Setting::get('studio_name')         ?: 'Waktunya Photobooth',
             'bankName'           => Setting::get('bank_name')           ?: '',
             'bankAccountNumber'  => Setting::get('bank_account_number') ?: '',
             'bankAccountHolder'  => Setting::get('bank_account_holder') ?: '',

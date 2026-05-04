@@ -77,7 +77,7 @@ class AIService
      */
     public function verifyTransferImage(string $base64Image, string $mimeType, string $caption = ''): array
     {
-        $studioName        = Setting::get('studio_name')         ?: 'Studio Foto';
+        $studioName        = Setting::get('studio_name')         ?: 'Waktunya Photobooth';
         $aiName            = Setting::get('ai_name')             ?: 'Nadia';
         $bankAccountHolder = Setting::get('bank_account_holder') ?: '';
         $bankAccountNumber = Setting::get('bank_account_number') ?: '';
@@ -196,7 +196,7 @@ PROMPT;
         }
 
         $aiName            = Setting::get('ai_name')            ?: 'Nadia';
-        $studioName        = Setting::get('studio_name')        ?: 'Photobooth Studio';
+        $studioName        = Setting::get('studio_name')        ?: 'Waktunya Photobooth';
         $tone              = Setting::get('ai_tone')            ?: 'sales';
         $bankName          = Setting::get('bank_name')          ?: '';
         $bankAccountNumber = Setting::get('bank_account_number') ?: '';

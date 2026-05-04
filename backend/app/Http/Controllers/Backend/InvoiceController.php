@@ -15,7 +15,7 @@ class InvoiceController extends Controller
     {
         $booking->load(['customer', 'package']);
 
-        $studioName = Setting::where('key', 'studio_name')->value('value') ?? 'Studio Foto';
+        $studioName = Setting::where('key', 'studio_name')->value('value') ?? 'Waktunya Photobooth';
 
         $pdf = Pdf::loadView('invoices.booking', [
             'booking'           => $booking,
@@ -35,7 +35,7 @@ class InvoiceController extends Controller
     {
         $booking->load(['customer', 'package']);
 
-        $studioName = Setting::where('key', 'studio_name')->value('value') ?? 'Studio Foto';
+        $studioName = Setting::where('key', 'studio_name')->value('value') ?? 'Waktunya Photobooth';
 
         $pdf = Pdf::loadView('invoices.booking', [
             'booking'           => $booking,

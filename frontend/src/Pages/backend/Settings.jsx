@@ -97,7 +97,7 @@ export default function Settings() {
         followup_delay_hours: 3,
         followup_message:     DEFAULT_FOLLOWUP_MSG,
         ai_name:              'Nadia',
-        studio_name:          'Photobooth Studio',
+        studio_name:          'Waktunya Photobooth',
         ai_tone:              'sales',
         bank_name:            '',
         bank_account_number:  '',
@@ -118,7 +118,7 @@ export default function Settings() {
                 followup_delay_hours: r.data.followup_delay_hours ?? 3,
                 followup_message:     r.data.followup_message      || DEFAULT_FOLLOWUP_MSG,
                 ai_name:              r.data.ai_name               || 'Nadia',
-                studio_name:          r.data.studio_name           || 'Photobooth Studio',
+                studio_name:          r.data.studio_name           || 'Waktunya Photobooth',
                 ai_tone:              r.data.ai_tone               || 'sales',
                 bank_name:            r.data.bank_name             || '',
                 bank_account_number:  r.data.bank_account_number   || '',
@@ -224,7 +224,7 @@ export default function Settings() {
                                     <input
                                         value={data.studio_name}
                                         onChange={e => handleChange('studio_name', e.target.value)}
-                                        placeholder="Photobooth Studio"
+                                        placeholder="Waktunya Photobooth"
                                         className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition"
                                     />
                                     <p className="mt-1 text-xs text-gray-400">Nama bisnis yang disebut AI ke customer</p>
