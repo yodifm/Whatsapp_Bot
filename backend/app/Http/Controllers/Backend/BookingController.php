@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Backend;
 
 use App\Http\Controllers\Controller;
 use App\Models\Booking;
+use App\Services\WhatsAppService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Throwable;
 
 class BookingController extends Controller
 {
@@ -64,11 +66,67 @@ class BookingController extends Controller
             'lokasi'            => $b->catatan,
             'frame'             => $b->frame,
             'warna_backdrop'    => $b->warna_backdrop,
-            'status'            => $b->status,
-            'syarat_venue'      => $b->syarat_venue,
-            'syarat_pembayaran' => $b->syarat_pembayaran,
-            'created_at'        => $b->created_at->format('Y-m-d H:i'),
+            'status'                    => $b->status,
+            'syarat_venue'              => $b->syarat_venue,
+            'syarat_pembayaran'         => $b->syarat_pembayaran,
+            'frame_design_url'          => $b->frame_design_url,
+            'frame_design_reference'    => $b->frame_design_reference,
+            'frame_design_notified_at'  => $b->frame_design_notified_at?->format('Y-m-d H:i'),
+            'created_at'                => $b->created_at->format('Y-m-d H:i'),
         ]));
+    }
+
+    public function uploadFrameDesign(Request $request, Booking $booking): JsonResponse
+    {
+        $request->validate([
+            'image' => 'required|image|max:5120',
+        ]);
+
+        // Save image to public/frame-designs/
+        $dir  = public_path('frame-designs');
+        if (! is_dir($dir)) {
+            mkdir($dir, 0755, true);
+        }
+
+        $filename = 'frame-' . $booking->id . '-' . time() . '.' . $request->file('image')->getClientOriginalExtension();
+        $request->file('image')->move($dir, $filename);
+        $imageUrl = url("frame-designs/{$filename}");
+
+        $booking->update([
+            'frame_design_url'          => $imageUrl,
+            'frame_design_notified_at'  => null,
+        ]);
+
+        // Notify customer via WhatsApp
+        $waId = $booking->customer->whatsapp_id ?? null;
+        if ($waId) {
+            try {
+                $wa = app(WhatsAppService::class);
+                $customerName = $booking->customer->nama ?? 'Kak';
+                $revisiInfo   = 'Kalau ada yang ingin direvisi, langsung kabarin kami ya (maks. 3x revisi) 😊';
+
+                $wa->sendImage(
+                    $waId,
+                    $imageUrl,
+                    "Halo {$customerName}! Desain frame foto kamu sudah siap nih 🎨\n{$revisiInfo}"
+                );
+
+                $booking->update(['frame_design_notified_at' => now()]);
+
+                \App\Models\ChatHistory::create([
+                    'customer_id' => $booking->customer_id,
+                    'role'        => 'assistant',
+                    'content'     => '[Desain frame dikirim]',
+                ]);
+            } catch (Throwable $e) {
+                logger()->error('Frame design notify error', ['message' => $e->getMessage()]);
+            }
+        }
+
+        return response()->json([
+            'frame_design_url'         => $imageUrl,
+            'frame_design_notified_at' => $booking->frame_design_notified_at?->format('Y-m-d H:i'),
+        ]);
     }
 
     public function updateFormStatus(Request $request, Booking $booking): JsonResponse

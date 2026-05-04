@@ -12,14 +12,16 @@ class Booking extends Model
         'tanggal', 'jam_mulai', 'durasi_jam', 'nama_acara',
         'frame', 'warna_backdrop', 'catatan', 'status', 'dp_amount',
         'syarat_venue', 'syarat_pembayaran',
+        'frame_design_url', 'frame_design_reference', 'frame_design_notified_at',
     ];
 
     protected $casts = [
-        'tanggal'           => 'date',
-        'dp_amount'         => 'integer',
-        'durasi_jam'        => 'integer',
-        'syarat_venue'      => 'boolean',
-        'syarat_pembayaran' => 'boolean',
+        'tanggal'                   => 'date',
+        'dp_amount'                 => 'integer',
+        'durasi_jam'                => 'integer',
+        'syarat_venue'              => 'boolean',
+        'syarat_pembayaran'         => 'boolean',
+        'frame_design_notified_at'  => 'datetime',
     ];
 
     public function customer(): BelongsTo

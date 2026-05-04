@@ -64,8 +64,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Bookings / Calendar
     Route::get('/bookings/booked-dates',          [BookingController::class, 'bookedDates']);
-    Route::get('/bookings/form-submissions',       [BookingController::class, 'formSubmissions']);
-    Route::patch('/bookings/{booking}/form-status',[BookingController::class, 'updateFormStatus']);
+    Route::get('/bookings/form-submissions',              [BookingController::class, 'formSubmissions']);
+    Route::patch('/bookings/{booking}/form-status',       [BookingController::class, 'updateFormStatus']);
+    Route::post('/bookings/{booking}/frame-design',       [BookingController::class, 'uploadFrameDesign']);
     Route::get('/bookings',                        [BookingController::class, 'index']);
     Route::post('/bookings',                       [BookingController::class, 'store']);
     Route::put('/bookings/{booking}',              [BookingController::class, 'update']);

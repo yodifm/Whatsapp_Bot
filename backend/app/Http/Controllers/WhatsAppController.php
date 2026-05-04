@@ -247,6 +247,16 @@ class WhatsAppController extends Controller
                         logger()->error('Invoice send error', ['message' => $invoiceErr->getMessage()]);
                     }
 
+                    // Ask about frame design reference
+                    $frameMsg = "Btw kak, untuk desain frame fotonya — ada referensi atau konsep tertentu yang diinginkan? Misalnya tema warna, font, atau contoh desain? 🎨\n\nKalau ada, kirim aja ke sini ya, nanti tim kami yang proses. Estimasi selesai 3 hari kerja. Kalau belum ada bayangan juga gapapa, tim kami bisa buatkan sesuai tema acara kamu 😊";
+
+                    $this->wa->sendText($waId, $frameMsg);
+                    ChatHistory::create([
+                        'customer_id' => $customer->id,
+                        'role'        => 'assistant',
+                        'content'     => $frameMsg,
+                    ]);
+
                     return;
                 }
 

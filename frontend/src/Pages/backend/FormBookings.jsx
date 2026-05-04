@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import BackendLayout from '@/layouts/BackendLayout';
 import api from '@/api/axios';
 
@@ -10,26 +10,30 @@ const STATUS_OPTS = [
     { val: 'cancelled', label: 'Dibatalkan', color: 'bg-red-100 text-red-700 border-red-200' },
 ];
 
+const DP_STATUSES = ['dp_paid', 'completed'];
+
 const BACKDROP_COLORS = {
-    Black:            '#1a1a1a',
-    Silver:           '#C0C0C0',
-    Gold:             '#D4AF37',
-    Maroon:           '#800000',
-    'Putih Polos':    '#F5F5F5',
+    Black:         '#1a1a1a',
+    Silver:        '#C0C0C0',
+    Gold:          '#D4AF37',
+    Maroon:        '#800000',
+    'Putih Polos': '#F5F5F5',
 };
 
 function statusBadge(val) {
-    const s = STATUS_OPTS.find(o => o.val === val);
-    return s ? s : { label: val, color: 'bg-gray-100 text-gray-600 border-gray-200' };
+    return STATUS_OPTS.find(o => o.val === val) ?? { label: val, color: 'bg-gray-100 text-gray-600 border-gray-200' };
 }
 
 export default function FormBookings() {
-    const [data,     setData]     = useState([]);
-    const [loading,  setLoading]  = useState(true);
-    const [search,   setSearch]   = useState('');
-    const [filter,   setFilter]   = useState('');
-    const [detail,   setDetail]   = useState(null);
-    const [updating, setUpdating] = useState(null);
+    const [data,          setData]          = useState([]);
+    const [loading,       setLoading]       = useState(true);
+    const [search,        setSearch]        = useState('');
+    const [filter,        setFilter]        = useState('');
+    const [detail,        setDetail]        = useState(null);
+    const [updating,      setUpdating]      = useState(null);
+    const [uploading,     setUploading]     = useState(false);
+    const [previewImg,    setPreviewImg]    = useState(null);
+    const fileRef = useRef();
 
     const load = async () => {
         setLoading(true);
@@ -56,6 +60,27 @@ export default function FormBookings() {
             if (detail?.id === id) setDetail(d => ({ ...d, status }));
         } finally {
             setUpdating(null);
+        }
+    };
+
+    const uploadDesign = async (bookingId, file) => {
+        setUploading(true);
+        try {
+            const fd = new FormData();
+            fd.append('image', file);
+            const r = await api.post(`/bookings/${bookingId}/frame-design`, fd, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+            const updated = {
+                frame_design_url:         r.data.frame_design_url,
+                frame_design_notified_at: r.data.frame_design_notified_at,
+            };
+            setData(d => d.map(b => b.id === bookingId ? { ...b, ...updated } : b));
+            if (detail?.id === bookingId) setDetail(d => ({ ...d, ...updated }));
+        } catch {
+            alert('Gagal upload desain, coba lagi.');
+        } finally {
+            setUploading(false);
         }
     };
 
@@ -137,6 +162,7 @@ export default function FormBookings() {
                                         <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Nama & Kontak</th>
                                         <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Acara</th>
                                         <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Detail</th>
+                                        <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Design Frame</th>
                                         <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
                                         <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Masuk</th>
                                         <th className="px-4 py-3" />
@@ -144,7 +170,8 @@ export default function FormBookings() {
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">
                                     {data.map(b => {
-                                        const st = statusBadge(b.status);
+                                        const st      = statusBadge(b.status);
+                                        const hasDp   = DP_STATUSES.includes(b.status);
                                         return (
                                             <tr key={b.id} className="hover:bg-gray-50/50 transition">
                                                 <td className="px-4 py-3">
@@ -160,7 +187,7 @@ export default function FormBookings() {
                                                     </p>
                                                 </td>
                                                 <td className="px-4 py-3">
-                                                    <div className="flex items-center gap-2">
+                                                    <div className="flex items-center gap-2 flex-wrap">
                                                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-xs font-medium">
                                                             Frame {b.frame?.toUpperCase()}
                                                         </span>
@@ -174,14 +201,45 @@ export default function FormBookings() {
                                                             </span>
                                                         )}
                                                     </div>
-                                                    {b.package && (
-                                                        <p className="text-violet-600 text-xs mt-1 font-medium">{b.package.nama}</p>
+                                                    {b.package && <p className="text-violet-600 text-xs mt-1 font-medium">{b.package.nama}</p>}
+                                                </td>
+
+                                                {/* Design Frame column */}
+                                                <td className="px-4 py-3">
+                                                    {!hasDp ? (
+                                                        <span className="text-xs text-gray-300 italic">Menunggu DP</span>
+                                                    ) : b.frame_design_url ? (
+                                                        <div className="flex items-center gap-2">
+                                                            <img src={b.frame_design_url} alt="design"
+                                                                onClick={() => setPreviewImg(b.frame_design_url)}
+                                                                className="w-10 h-10 rounded-lg object-cover border border-gray-200 cursor-pointer hover:scale-105 transition" />
+                                                            <div>
+                                                                {b.frame_design_notified_at ? (
+                                                                    <span className="text-[10px] text-green-600 font-medium flex items-center gap-0.5">
+                                                                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                                                        </svg>
+                                                                        Terkirim
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-[10px] text-orange-500 font-medium">Belum notif</span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <label className="cursor-pointer inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border-2 border-dashed border-violet-300 text-violet-600 text-xs font-semibold hover:bg-violet-50 transition">
+                                                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                                                            </svg>
+                                                            Upload
+                                                            <input type="file" accept="image/*" className="hidden"
+                                                                onChange={e => e.target.files[0] && uploadDesign(b.id, e.target.files[0])} />
+                                                        </label>
                                                     )}
                                                 </td>
+
                                                 <td className="px-4 py-3">
-                                                    <select
-                                                        value={b.status}
-                                                        disabled={updating === b.id}
+                                                    <select value={b.status} disabled={updating === b.id}
                                                         onChange={e => changeStatus(b.id, e.target.value)}
                                                         className={`text-xs font-semibold px-2.5 py-1.5 rounded-xl border cursor-pointer focus:outline-none focus:ring-2 focus:ring-violet-300 transition ${st.color} ${updating === b.id ? 'opacity-50' : ''}`}>
                                                         {STATUS_OPTS.map(s => (
@@ -189,9 +247,7 @@ export default function FormBookings() {
                                                         ))}
                                                     </select>
                                                 </td>
-                                                <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">
-                                                    {b.created_at}
-                                                </td>
+                                                <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">{b.created_at}</td>
                                                 <td className="px-4 py-3">
                                                     <button onClick={() => setDetail(b)}
                                                         className="text-xs text-violet-600 font-semibold hover:text-violet-800 transition px-2 py-1 rounded-lg hover:bg-violet-50">
@@ -207,6 +263,19 @@ export default function FormBookings() {
                     )}
                 </div>
             </div>
+
+            {/* Image preview lightbox */}
+            {previewImg && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4"
+                    onClick={() => setPreviewImg(null)}>
+                    <img src={previewImg} alt="preview" className="max-w-2xl max-h-[90vh] rounded-2xl shadow-2xl" />
+                    <button className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/20 text-white flex items-center justify-center hover:bg-white/30 transition">
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+            )}
 
             {/* Detail drawer */}
             {detail && (
@@ -233,8 +302,7 @@ export default function FormBookings() {
                                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Status</p>
                                 <div className="flex flex-wrap gap-2">
                                     {STATUS_OPTS.map(s => (
-                                        <button key={s.val}
-                                            disabled={updating === detail.id}
+                                        <button key={s.val} disabled={updating === detail.id}
                                             onClick={() => changeStatus(detail.id, s.val)}
                                             className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
                                                 detail.status === s.val
@@ -248,14 +316,12 @@ export default function FormBookings() {
                             </div>
 
                             <DrawerSection title="Data Diri">
-                                <DrawerRow label="Nama"       value={detail.customer.nama} />
-                                <DrawerRow label="WhatsApp"   value={detail.no_whatsapp}
+                                <DrawerRow label="Nama" value={detail.customer.nama} />
+                                <DrawerRow label="WhatsApp" value={detail.no_whatsapp}
                                     extra={
                                         <a href={`https://wa.me/${detail.no_whatsapp?.replace(/\D/g,'')}`}
                                             target="_blank" rel="noreferrer"
-                                            className="text-xs text-green-600 font-semibold hover:underline">
-                                            Hubungi ↗
-                                        </a>
+                                            className="text-xs text-green-600 font-semibold hover:underline">Hubungi ↗</a>
                                     } />
                                 {detail.email && <DrawerRow label="Email" value={detail.email} />}
                             </DrawerSection>
@@ -275,13 +341,85 @@ export default function FormBookings() {
                                 <DrawerRow label="Backdrop" value={
                                     <span className="flex items-center gap-2">
                                         {BACKDROP_COLORS[detail.warna_backdrop] && (
-                                            <span className="w-3.5 h-3.5 rounded-full border border-black/10 flex-shrink-0 inline-block"
+                                            <span className="w-3.5 h-3.5 rounded-full border border-black/10 inline-block"
                                                 style={{ backgroundColor: BACKDROP_COLORS[detail.warna_backdrop] }} />
                                         )}
                                         {detail.warna_backdrop}
                                     </span>
                                 } />
                             </DrawerSection>
+
+                            {/* Design Frame section — only when dp_paid+ */}
+                            {DP_STATUSES.includes(detail.status) && (
+                                <div>
+                                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Design Frame</p>
+                                    <div className="rounded-2xl border-2 border-dashed border-violet-200 overflow-hidden">
+                                        {detail.frame_design_url ? (
+                                            <div>
+                                                <div className="relative group cursor-pointer"
+                                                    onClick={() => setPreviewImg(detail.frame_design_url)}>
+                                                    <img src={detail.frame_design_url} alt="frame design"
+                                                        className="w-full h-44 object-contain bg-gray-50" />
+                                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition flex items-center justify-center">
+                                                        <span className="opacity-0 group-hover:opacity-100 bg-white text-gray-800 text-xs font-semibold px-3 py-1.5 rounded-full transition">
+                                                            Lihat penuh
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <div className="px-4 py-3 bg-white flex items-center justify-between">
+                                                    <div>
+                                                        {detail.frame_design_notified_at ? (
+                                                            <div className="flex items-center gap-1.5 text-green-600 text-xs font-medium">
+                                                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                                                </svg>
+                                                                Dikirim ke customer {detail.frame_design_notified_at}
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-orange-500 text-xs font-medium">⚠ Belum terkirim ke customer</span>
+                                                        )}
+                                                    </div>
+                                                    <label className="cursor-pointer text-xs text-violet-600 font-semibold hover:text-violet-800 transition">
+                                                        Ganti
+                                                        <input type="file" accept="image/*" className="hidden"
+                                                            onChange={e => e.target.files[0] && uploadDesign(detail.id, e.target.files[0])} />
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <label className={`flex flex-col items-center justify-center gap-3 py-8 cursor-pointer hover:bg-violet-50/50 transition ${uploading ? 'opacity-60 pointer-events-none' : ''}`}>
+                                                {uploading ? (
+                                                    <>
+                                                        <svg className="animate-spin w-6 h-6 text-violet-400" fill="none" viewBox="0 0 24 24">
+                                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                                                        </svg>
+                                                        <span className="text-sm text-violet-500 font-medium">Mengupload...</span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <div className="w-12 h-12 rounded-2xl bg-violet-100 flex items-center justify-center text-2xl">🎨</div>
+                                                        <div className="text-center">
+                                                            <p className="text-sm font-semibold text-violet-700">Upload Design Frame</p>
+                                                            <p className="text-xs text-gray-400 mt-0.5">Setelah upload, otomatis dikirim ke customer via WA</p>
+                                                        </div>
+                                                        <span className="px-4 py-2 rounded-xl bg-violet-600 text-white text-xs font-semibold">
+                                                            Pilih Gambar
+                                                        </span>
+                                                    </>
+                                                )}
+                                                <input ref={fileRef} type="file" accept="image/*" className="hidden"
+                                                    onChange={e => e.target.files[0] && uploadDesign(detail.id, e.target.files[0])} />
+                                            </label>
+                                        )}
+                                    </div>
+                                    {detail.frame_design_reference && (
+                                        <div className="mt-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 text-xs text-amber-800">
+                                            <span className="font-semibold">Referensi dari customer:</span> {detail.frame_design_reference}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
 
                             <DrawerSection title="Persetujuan">
                                 <DrawerRow label="Syarat Venue"      value={detail.syarat_venue ? '✅ Disetujui' : '❌ Belum'} />
@@ -311,9 +449,7 @@ function DrawerSection({ title, children }) {
     return (
         <div>
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">{title}</p>
-            <div className="bg-gray-50 rounded-2xl overflow-hidden divide-y divide-gray-100">
-                {children}
-            </div>
+            <div className="bg-gray-50 rounded-2xl overflow-hidden divide-y divide-gray-100">{children}</div>
         </div>
     );
 }
