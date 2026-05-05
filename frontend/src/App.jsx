@@ -8,6 +8,7 @@ import UploadFrame from '@/Pages/backend/UploadFrame';
 import Kiosks from '@/Pages/backend/Kiosks';
 import Logistics from '@/Pages/backend/Logistics';
 import LogisticStaff from '@/Pages/backend/LogisticStaff';
+import StaffCheckin from '@/Pages/StaffCheckin';
 import Sales from '@/Pages/backend/Sales';
 import Analytics from '@/Pages/backend/Analytics';
 import Bookings from '@/Pages/backend/Bookings';
@@ -27,6 +28,7 @@ export default function App() {
                 <Routes>
                     <Route path="/login"   element={<Login />} />
                     <Route path="/booking" element={<BookingForm />} />
+                    <Route path="/staff"   element={<StaffCheckin />} />
                     <Route path="/"          element={<PrivateRoute><Dashboard /></PrivateRoute>} />
                     <Route path="/settings"  element={<PrivateRoute><Settings /></PrivateRoute>} />
                     <Route path="/packages"  element={<PrivateRoute><Packages /></PrivateRoute>} />

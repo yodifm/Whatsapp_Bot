@@ -30,6 +30,12 @@ Route::post('/webhook/whatsapp', [WhatsAppController::class, 'handle']);
 Route::get('/booking-form/packages', [BookingFormController::class, 'packages']);
 Route::post('/booking-form',         [BookingFormController::class, 'store']);
 
+// Public staff logistic checklist (no auth needed — internal staff tool)
+Route::get('/staff-checkin/items',            [LogisticStaffController::class, 'items']);
+Route::get('/staff-checkin/active-checkout',  [LogisticStaffController::class, 'activeCheckout']);
+Route::get('/staff-checkin/upcoming-bookings',[LogisticStaffController::class, 'upcomingBookings']);
+Route::post('/staff-checkin',                 [LogisticStaffController::class, 'store']);
+
 // Auth
 Route::post('/login', [AuthController::class, 'login']);
 
