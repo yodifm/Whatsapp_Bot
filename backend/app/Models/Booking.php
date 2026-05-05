@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Booking extends Model
 {
@@ -13,6 +14,7 @@ class Booking extends Model
         'frame', 'warna_backdrop', 'catatan', 'status', 'dp_amount',
         'syarat_venue', 'syarat_pembayaran',
         'frame_design_url', 'frame_design_reference', 'frame_design_notified_at',
+        'biaya_transport', 'biaya_staff',
     ];
 
     protected $casts = [
@@ -22,6 +24,8 @@ class Booking extends Model
         'syarat_venue'              => 'boolean',
         'syarat_pembayaran'         => 'boolean',
         'frame_design_notified_at'  => 'datetime',
+        'biaya_transport'           => 'integer',
+        'biaya_staff'               => 'integer',
     ];
 
     public function customer(): BelongsTo
@@ -32,5 +36,10 @@ class Booking extends Model
     public function package(): BelongsTo
     {
         return $this->belongsTo(Package::class);
+    }
+
+    public function logisticLogs(): HasMany
+    {
+        return $this->hasMany(LogisticLog::class);
     }
 }

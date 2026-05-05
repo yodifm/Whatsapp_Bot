@@ -5,6 +5,7 @@ use App\Http\Controllers\Backend\AnalyticsController;
 use App\Http\Controllers\Backend\KioskController;
 use App\Http\Controllers\Backend\LogisticController;
 use App\Http\Controllers\Backend\LogisticStaffController;
+use App\Http\Controllers\Backend\SalesController;
 use App\Http\Controllers\Backend\AuthController;
 use App\Http\Controllers\Backend\BookingController;
 use App\Http\Controllers\Backend\BroadcastController;
@@ -109,9 +110,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/logistic-logs/{log}',      [LogisticController::class, 'destroyLog']);
 
     // Logistic staff — staff submits their checklist before/after event
-    Route::get('/logistic-staff/items',          [LogisticStaffController::class, 'items']);
-    Route::get('/logistic-staff/active-checkout',[LogisticStaffController::class, 'activeCheckout']);
-    Route::post('/logistic-staff',               [LogisticStaffController::class, 'store']);
+    Route::get('/logistic-staff/items',             [LogisticStaffController::class, 'items']);
+    Route::get('/logistic-staff/active-checkout',   [LogisticStaffController::class, 'activeCheckout']);
+    Route::get('/logistic-staff/upcoming-bookings', [LogisticStaffController::class, 'upcomingBookings']);
+    Route::post('/logistic-staff',                  [LogisticStaffController::class, 'store']);
+
+    // Sales
+    Route::get('/sales',                        [SalesController::class, 'index']);
+    Route::patch('/sales/{booking}/expenses',   [SalesController::class, 'updateExpenses']);
 
     // Discounts
     Route::get('/discounts',               [DiscountController::class, 'index']);

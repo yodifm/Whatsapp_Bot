@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class LogisticLog extends Model
 {
-    protected $fillable = ['type', 'staff_nama', 'event_nama', 'tanggal', 'catatan', 'checkout_log_id'];
+    protected $fillable = ['type', 'staff_nama', 'event_nama', 'tanggal', 'catatan', 'checkout_log_id', 'booking_id'];
 
     protected $casts = ['tanggal' => 'date'];
 
@@ -28,5 +28,10 @@ class LogisticLog extends Model
     public function checkoutLog(): BelongsTo
     {
         return $this->belongsTo(LogisticLog::class, 'checkout_log_id');
+    }
+
+    public function booking(): BelongsTo
+    {
+        return $this->belongsTo(Booking::class);
     }
 }

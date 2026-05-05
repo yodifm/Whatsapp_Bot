@@ -14,13 +14,21 @@ function formatDate(d) {
 
 // ─── Checkout form ────────────────────────────────────────────────────────────
 function CheckoutForm({ masterItems, onSuccess }) {
-    const [staffNama, setStaffNama] = useState('');
-    const [eventNama, setEventNama] = useState('');
-    const [tanggal, setTanggal]     = useState(new Date().toISOString().slice(0, 10));
-    const [catatan, setCatatan]     = useState('');
-    const [rows, setRows]           = useState([{ logistic_id: '', qty: 1 }]);
+    const [staffNama, setStaffNama]   = useState('');
+    const [eventNama, setEventNama]   = useState('');
+    const [bookingId, setBookingId]   = useState('');
+    const [bookings, setBookings]     = useState([]);
+    const [tanggal, setTanggal]       = useState(new Date().toISOString().slice(0, 10));
+    const [catatan, setCatatan]       = useState('');
+    const [rows, setRows]             = useState([{ logistic_id: '', qty: 1 }]);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError]           = useState('');
+
+    useEffect(() => {
+        api.get('/logistic-staff/upcoming-bookings')
+            .then(r => setBookings(r.data))
+            .catch(() => {});
+    }, []);
 
     const addRow    = () => setRows(r => [...r, { logistic_id: '', qty: 1 }]);
     const removeRow = (idx) => setRows(r => r.filter((_, i) => i !== idx));
@@ -41,11 +49,12 @@ function CheckoutForm({ masterItems, onSuccess }) {
         setSubmitting(true);
         try {
             await api.post('/logistic-staff', {
-                type: 'checkout',
+                type:       'checkout',
                 staff_nama: staffNama,
                 event_nama: eventNama || null,
+                booking_id: bookingId ? Number(bookingId) : null,
                 tanggal,
-                catatan: catatan || null,
+                catatan:    catatan || null,
                 items: validRows.map(r => ({ logistic_id: Number(r.logistic_id), qty: Number(r.qty) })),
             });
             onSuccess('checkout');
@@ -76,10 +85,26 @@ function CheckoutForm({ masterItems, onSuccess }) {
                                 className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400" />
                         </div>
                         <div className="sm:col-span-2">
-                            <label className="block text-xs font-medium text-gray-600 mb-1">Nama Event / Venue</label>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Link ke Booking (opsional)</label>
+                            <select value={bookingId}
+                                onChange={e => {
+                                    setBookingId(e.target.value);
+                                    const b = bookings.find(b => b.id === Number(e.target.value));
+                                    if (b) { setTanggal(b.tanggal); setEventNama(''); }
+                                }}
+                                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white">
+                                <option value="">— Tidak perlu link —</option>
+                                {bookings.map(b => (
+                                    <option key={b.id} value={b.id}>{b.label}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="sm:col-span-2">
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Nama Event / Venue {bookingId ? '(auto dari booking)' : ''}</label>
                             <input value={eventNama} onChange={e => setEventNama(e.target.value)}
-                                placeholder="Misal: Wedding Budi & Ani — Hotel Grand Hyatt"
-                                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                                placeholder={bookingId ? 'Akan diisi otomatis dari booking' : 'Misal: Wedding Budi & Ani — Hotel Grand Hyatt'}
+                                disabled={!!bookingId}
+                                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:bg-gray-50 disabled:text-gray-400" />
                         </div>
                     </div>
                 </div>

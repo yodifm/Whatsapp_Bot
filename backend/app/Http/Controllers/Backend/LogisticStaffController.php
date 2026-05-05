@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Backend;
 
 use App\Http\Controllers\Controller;
+use App\Models\Booking;
 use App\Models\Logistic;
 use App\Models\LogisticLog;
 use Illuminate\Http\JsonResponse;
@@ -15,6 +16,26 @@ class LogisticStaffController extends Controller
         $items = Logistic::where('aktif', true)->orderBy('nama')->get(['id', 'nama', 'harga', 'satuan', 'qty']);
 
         return response()->json($items);
+    }
+
+    /** Upcoming/recent bookings for the booking-link dropdown. */
+    public function upcomingBookings(): JsonResponse
+    {
+        $bookings = Booking::with('customer')
+            ->whereNotIn('status', ['cancelled'])
+            ->where('tanggal', '>=', now()->subDays(7)->toDateString())
+            ->orderBy('tanggal')
+            ->limit(30)
+            ->get()
+            ->map(fn($b) => [
+                'id'           => $b->id,
+                'tanggal'      => $b->tanggal->format('Y-m-d'),
+                'nama_acara'   => $b->nama_acara,
+                'customer_nama'=> $b->customer?->nama ?? '—',
+                'label'        => trim(($b->nama_acara ?: '') . ' — ' . ($b->customer?->nama ?? '—') . ' (' . $b->tanggal->format('d M') . ')'),
+            ]);
+
+        return response()->json($bookings);
     }
 
     /** Find the most recent checkout for a staff member that has no return yet. */
@@ -68,6 +89,7 @@ class LogisticStaffController extends Controller
         $validated = $request->validate([
             'staff_nama' => 'required|string|max:100',
             'event_nama' => 'nullable|string|max:200',
+            'booking_id' => 'nullable|exists:bookings,id',
             'tanggal'    => 'required|date',
             'catatan'    => 'nullable|string|max:1000',
             'items'      => 'required|array|min:1',
@@ -75,10 +97,18 @@ class LogisticStaffController extends Controller
             'items.*.qty'         => 'required|integer|min:1',
         ]);
 
+        // Auto-fill event_nama from booking if not provided
+        $eventNama = $validated['event_nama'] ?? null;
+        if (! $eventNama && ! empty($validated['booking_id'])) {
+            $booking   = Booking::with('customer')->find($validated['booking_id']);
+            $eventNama = trim(($booking?->nama_acara ?: '') . ' — ' . ($booking?->customer?->nama ?? ''));
+        }
+
         $log = LogisticLog::create([
             'type'       => 'checkout',
             'staff_nama' => $validated['staff_nama'],
-            'event_nama' => $validated['event_nama'] ?? null,
+            'event_nama' => $eventNama,
+            'booking_id' => $validated['booking_id'] ?? null,
             'tanggal'    => $validated['tanggal'],
             'catatan'    => $validated['catatan'] ?? null,
         ]);
