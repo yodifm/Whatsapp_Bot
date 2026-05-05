@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import BackendLayout from '@/Layouts/BackendLayout';
-import api from '@/lib/api';
+import api from '@/api/axios';
 
 const EMPTY_FORM = { nama: '', qty: '', harga: '', satuan: 'pcs', aktif: true };
 
