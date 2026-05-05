@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Kiosk;
 use App\Models\Setting;
 use GuzzleHttp\Client;
 
@@ -23,14 +24,15 @@ class AIService
     }
 
     public function getReply(
-        string $userMessage,
-        array  $history,
-        array  $packageData,
-        array  $faqData       = [],
-        array  $bookedDates   = [],
-        array  $discountData  = [],
+        string  $userMessage,
+        array   $history,
+        array   $packageData,
+        array   $faqData       = [],
+        array   $bookedDates   = [],
+        array   $discountData  = [],
+        ?Kiosk  $kiosk         = null,
     ): string {
-        $systemPrompt = $this->buildSystemPrompt($packageData, $faqData, $bookedDates, $discountData);
+        $systemPrompt = $this->buildSystemPrompt($packageData, $faqData, $bookedDates, $discountData, $kiosk);
 
         $messages = [];
         foreach ($history as $item) {
@@ -75,13 +77,13 @@ class AIService
      * Analyze a transfer/bukti bayar image using Claude Vision.
      * Returns ['verified' => bool, 'amount' => int|null, 'reply' => string]
      */
-    public function verifyTransferImage(string $base64Image, string $mimeType, string $caption = ''): array
+    public function verifyTransferImage(string $base64Image, string $mimeType, string $caption = '', ?Kiosk $kiosk = null): array
     {
-        $studioName        = Setting::get('studio_name')         ?: 'Waktunya Photobooth';
-        $aiName            = Setting::get('ai_name')             ?: 'Nadia';
-        $bankAccountHolder = Setting::get('bank_account_holder') ?: '';
-        $bankAccountNumber = Setting::get('bank_account_number') ?: '';
-        $bankName          = Setting::get('bank_name')           ?: '';
+        $studioName        = ($kiosk?->studio_name)         ?: (Setting::get('studio_name')         ?: 'Waktunya Photobooth');
+        $aiName            = ($kiosk?->ai_name)             ?: (Setting::get('ai_name')             ?: 'Nadia');
+        $bankAccountHolder = ($kiosk?->bank_account_holder) ?: (Setting::get('bank_account_holder') ?: '');
+        $bankAccountNumber = ($kiosk?->bank_account_number) ?: (Setting::get('bank_account_number') ?: '');
+        $bankName          = ($kiosk?->bank_name)           ?: (Setting::get('bank_name')           ?: '');
 
         $rekeningInfo = ($bankName && $bankAccountNumber)
             ? "Rekening tujuan yang benar: {$bankName} no. {$bankAccountNumber} a/n {$bankAccountHolder}"
@@ -157,7 +159,7 @@ PROMPT;
         ];
     }
 
-    private function buildSystemPrompt(array $packageData, array $faqData = [], array $bookedDates = [], array $discountData = []): string
+    private function buildSystemPrompt(array $packageData, array $faqData = [], array $bookedDates = [], array $discountData = [], ?Kiosk $kiosk = null): string
     {
         $paketList = '';
         foreach ($packageData as $p) {
@@ -195,12 +197,12 @@ PROMPT;
             $slotSection = "\n=== TANGGAL SUDAH TERPESAN ===\n{$dates}\nJangan konfirmasi slot untuk tanggal-tanggal di atas. Tawarkan tanggal alternatif.\n==============================\n";
         }
 
-        $aiName            = Setting::get('ai_name')            ?: 'Nadia';
-        $studioName        = Setting::get('studio_name')        ?: 'Waktunya Photobooth';
-        $tone              = Setting::get('ai_tone')            ?: 'sales';
-        $bankName          = Setting::get('bank_name')          ?: '';
-        $bankAccountNumber = Setting::get('bank_account_number') ?: '';
-        $bankAccountHolder = Setting::get('bank_account_holder') ?: '';
+        $aiName            = ($kiosk?->ai_name)             ?: (Setting::get('ai_name')             ?: 'Nadia');
+        $studioName        = ($kiosk?->studio_name)         ?: (Setting::get('studio_name')         ?: 'Waktunya Photobooth');
+        $tone              = ($kiosk?->ai_tone)             ?: (Setting::get('ai_tone')             ?: 'sales');
+        $bankName          = ($kiosk?->bank_name)           ?: (Setting::get('bank_name')           ?: '');
+        $bankAccountNumber = ($kiosk?->bank_account_number) ?: (Setting::get('bank_account_number') ?: '');
+        $bankAccountHolder = ($kiosk?->bank_account_holder) ?: (Setting::get('bank_account_holder') ?: '');
 
         $bankSection = '';
         if ($bankName && $bankAccountNumber) {

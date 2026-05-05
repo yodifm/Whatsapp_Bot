@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\ChatHistory;
 use App\Models\Customer;
 use App\Models\Faq;
+use App\Models\Kiosk;
 use App\Models\Package;
 use App\Models\Setting;
 use App\Services\AIService;
@@ -29,10 +30,18 @@ class WhatsAppController extends Controller
         $token     = $request->query('hub_verify_token');
         $challenge = $request->query('hub_challenge');
 
-        $verifyToken = Setting::get('wa_verify_token')
-            ?: config('services.whatsapp.verify_token', '');
+        if ($mode !== 'subscribe') {
+            return response('Forbidden', 403);
+        }
 
-        if ($mode === 'subscribe' && $token === $verifyToken) {
+        // Check global setting
+        $globalToken = Setting::get('wa_verify_token') ?: config('services.whatsapp.verify_token', '');
+        if ($token === $globalToken) {
+            return response($challenge, 200);
+        }
+
+        // Check any active kiosk verify token
+        if (Kiosk::where('aktif', true)->where('wa_verify_token', $token)->exists()) {
             return response($challenge, 200);
         }
 
@@ -52,6 +61,15 @@ class WhatsAppController extends Controller
         $waId        = $msg['from'];
         $messageType = $msg['type'] ?? 'unknown';
 
+        // Resolve kiosk by phone_number_id from webhook metadata
+        $phoneNumberId = $payload['metadata']['phone_number_id'] ?? null;
+        $kiosk = $phoneNumberId
+            ? Kiosk::where('wa_phone_number_id', $phoneNumberId)->where('aktif', true)->first()
+            : null;
+
+        // Build kiosk-aware WA service and AI context
+        $wa = $kiosk ? WhatsAppService::forKiosk($kiosk) : $this->wa;
+
         try {
             $customer = Customer::firstOrCreate(
                 ['whatsapp_id' => $waId],
@@ -63,7 +81,7 @@ class WhatsAppController extends Controller
             }
 
             if ($messageType === 'image') {
-                $this->handleImageMessage($msg, $customer, $waId);
+                $this->handleImageMessage($msg, $customer, $waId, $wa, $kiosk);
                 return response('OK', 200);
             }
 
@@ -100,7 +118,7 @@ class WhatsAppController extends Controller
                 ->map(fn($d) => $d->format('Y-m-d'))
                 ->unique()->values()->toArray();
 
-            $rawReply = $this->ai->getReply($userText, $history, $packages, $faqs, $bookedDates, $discounts);
+            $rawReply = $this->ai->getReply($userText, $history, $packages, $faqs, $bookedDates, $discounts, $kiosk);
 
             ['reply' => $aiReply, 'lead' => $lead] = $this->ai->extractLeadData($rawReply);
 
@@ -120,7 +138,7 @@ class WhatsAppController extends Controller
 
                 // Send pricelist image after form complete
                 $pricelistUrl = url('images/pricelist.jpg');
-                $this->wa->sendImage(
+                $wa->sendImage(
                     $waId,
                     $pricelistUrl,
                     "Berikut pricelist kami, apabila ada pertanyaan silakan yaa kak☺️"
@@ -133,7 +151,7 @@ class WhatsAppController extends Controller
                 ]);
             }
 
-            $this->wa->sendText($waId, $aiReply);
+            $wa->sendText($waId, $aiReply);
 
             ChatHistory::create([
                 'customer_id' => $customer->id,
@@ -150,7 +168,7 @@ class WhatsAppController extends Controller
         return response('OK', 200);
     }
 
-    private function handleImageMessage(array $msg, Customer $customer, string $waId): void
+    private function handleImageMessage(array $msg, Customer $customer, string $waId, WhatsAppService $wa, ?Kiosk $kiosk = null): void
     {
         $mediaId  = $msg['image']['id']      ?? null;
         $caption  = $msg['image']['caption'] ?? '';
@@ -170,7 +188,9 @@ class WhatsAppController extends Controller
         }
 
         try {
-            $accessToken = Setting::get('wa_access_token') ?: config('services.whatsapp.access_token', '');
+            $accessToken = $kiosk
+                ? $kiosk->wa_access_token
+                : (Setting::get('wa_access_token') ?: config('services.whatsapp.access_token', ''));
 
             // Step 1: Get media URL from WhatsApp
             $http      = new \GuzzleHttp\Client(['timeout' => 15]);
@@ -193,7 +213,7 @@ class WhatsAppController extends Controller
             $base64     = base64_encode($imageBytes);
 
             // Step 3: Send to Claude Vision for transfer verification
-            $result = $this->ai->verifyTransferImage($base64, $mimeType, $caption);
+            $result = $this->ai->verifyTransferImage($base64, $mimeType, $caption, $kiosk);
 
             // Step 4: If verified, update status to dp_paid and send invoice
             if ($result['verified']) {
@@ -217,7 +237,7 @@ class WhatsAppController extends Controller
                     $customer->update(['status' => 'booked']);
 
                     // Send confirmation message first
-                    $this->wa->sendText($waId, $result['reply']);
+                    $wa->sendText($waId, $result['reply']);
 
                     ChatHistory::create([
                         'customer_id' => $customer->id,
@@ -231,7 +251,7 @@ class WhatsAppController extends Controller
                         $invoicePath = public_path(parse_url($invoiceUrl, PHP_URL_PATH));
                         $filename    = 'Invoice-DP-' . str($latestBooking->customer->nama)->slug() . '.pdf';
 
-                        $this->wa->sendDocument(
+                        $wa->sendDocument(
                             $waId,
                             $invoicePath,
                             $filename,
@@ -250,7 +270,7 @@ class WhatsAppController extends Controller
                     // Ask about frame design reference
                     $frameMsg = "Btw kak, untuk desain frame fotonya — ada referensi atau konsep tertentu yang diinginkan? Misalnya tema warna, font, atau contoh desain? 🎨\n\nKalau ada, kirim aja ke sini ya, nanti tim kami yang proses. Estimasi selesai 3 hari kerja. Kalau belum ada bayangan juga gapapa, tim kami bisa buatkan sesuai tema acara kamu 😊";
 
-                    $this->wa->sendText($waId, $frameMsg);
+                    $wa->sendText($waId, $frameMsg);
                     ChatHistory::create([
                         'customer_id' => $customer->id,
                         'role'        => 'assistant',
@@ -263,7 +283,7 @@ class WhatsAppController extends Controller
                 $customer->update(['status' => 'booked']);
             }
 
-            $this->wa->sendText($waId, $result['reply']);
+            $wa->sendText($waId, $result['reply']);
 
             ChatHistory::create([
                 'customer_id' => $customer->id,

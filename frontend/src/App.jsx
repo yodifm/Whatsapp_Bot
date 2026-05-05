@@ -5,6 +5,7 @@ import Login from '@/Pages/Login';
 import BookingForm from '@/Pages/BookingForm';
 import FormBookings from '@/Pages/backend/FormBookings';
 import UploadFrame from '@/Pages/backend/UploadFrame';
+import Kiosks from '@/Pages/backend/Kiosks';
 import Analytics from '@/Pages/backend/Analytics';
 import Bookings from '@/Pages/backend/Bookings';
 import Discounts from '@/Pages/backend/Discounts';
@@ -35,6 +36,7 @@ export default function App() {
                     <Route path="/gallery"        element={<PrivateRoute><Gallery /></PrivateRoute>} />
                     <Route path="/form-bookings"  element={<PrivateRoute><FormBookings /></PrivateRoute>} />
                     <Route path="/upload-frame"  element={<PrivateRoute><UploadFrame /></PrivateRoute>} />
+                    <Route path="/kiosks"        element={<PrivateRoute><Kiosks /></PrivateRoute>} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
             </BrowserRouter>

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\BookingFormController;
 use App\Http\Controllers\Backend\AnalyticsController;
+use App\Http\Controllers\Backend\KioskController;
 use App\Http\Controllers\Backend\AuthController;
 use App\Http\Controllers\Backend\BookingController;
 use App\Http\Controllers\Backend\BroadcastController;
@@ -87,6 +88,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/gallery',             [GalleryController::class, 'store']);
     Route::put('/gallery/{gallery}',    [GalleryController::class, 'update']);
     Route::delete('/gallery/{gallery}', [GalleryController::class, 'destroy']);
+
+    // Kiosks
+    Route::get('/kiosks',               [KioskController::class, 'index']);
+    Route::post('/kiosks',              [KioskController::class, 'store']);
+    Route::put('/kiosks/{kiosk}',       [KioskController::class, 'update']);
+    Route::patch('/kiosks/{kiosk}/toggle', [KioskController::class, 'toggle']);
+    Route::delete('/kiosks/{kiosk}',    [KioskController::class, 'destroy']);
 
     // Discounts
     Route::get('/discounts',               [DiscountController::class, 'index']);

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Kiosk;
 use App\Models\Setting;
 use GuzzleHttp\Client;
 
@@ -23,6 +24,14 @@ class WhatsAppService
             'base_uri' => 'https://graph.facebook.com',
             'timeout'  => 15,
         ]);
+    }
+
+    public static function forKiosk(Kiosk $kiosk): self
+    {
+        $instance = new self();
+        $instance->phoneNumberId = $kiosk->wa_phone_number_id;
+        $instance->accessToken   = $kiosk->wa_access_token;
+        return $instance;
     }
 
     public function sendText(string $to, string $message): void
