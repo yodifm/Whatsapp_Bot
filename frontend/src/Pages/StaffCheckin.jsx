@@ -31,15 +31,22 @@ function BerangkatForm({ onSuccess }) {
     const [error, setError]         = useState('');
 
     useEffect(() => {
-        Promise.all([
-            http.get('/staff-checkin/items'),
-            http.get('/staff-checkin/upcoming-bookings'),
-        ]).then(([r1, r2]) => { setItems(r1.data); setBookings(r2.data); })
-          .catch(() => {})
-          .finally(() => setLoading(false));
+        const load = async () => {
+            try {
+                const r = await http.get('/staff-checkin/items');
+                setItems(Array.isArray(r.data) ? r.data : []);
+            } catch {}
+            try {
+                const r = await http.get('/staff-checkin/upcoming-bookings');
+                setBookings(Array.isArray(r.data) ? r.data : []);
+            } catch {}
+            setLoading(false);
+        };
+        load();
     }, []);
 
-    const getItem   = (id) => items.find(i => i.id === Number(id));
+    const safeItems = Array.isArray(items) ? items : [];
+    const getItem   = (id) => safeItems.find(i => i.id === Number(id));
     const addRow    = () => setRows(r => [...r, { logistic_id: '', qty: 1 }]);
     const removeRow = (idx) => setRows(r => r.filter((_, i) => i !== idx));
     const setRow    = (idx, k, v) => setRows(r => r.map((row, i) => i === idx ? { ...row, [k]: v } : row));
