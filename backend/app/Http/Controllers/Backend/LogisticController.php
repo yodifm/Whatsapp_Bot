@@ -64,18 +64,21 @@ class LogisticController extends Controller
 
     public function logs(): JsonResponse
     {
-        $logs = LogisticLog::with('items.logistic')
+        $logs = LogisticLog::with(['items', 'returnLog', 'checkoutLog'])
             ->orderByDesc('tanggal')
             ->orderByDesc('created_at')
             ->get()
             ->map(fn($log) => [
-                'id'         => $log->id,
-                'staff_nama' => $log->staff_nama,
-                'event_nama' => $log->event_nama,
-                'tanggal'    => $log->tanggal->format('Y-m-d'),
-                'catatan'    => $log->catatan,
-                'created_at' => $log->created_at->format('d M Y H:i'),
-                'items'      => $log->items->map(fn($item) => [
+                'id'              => $log->id,
+                'type'            => $log->type,
+                'checkout_log_id' => $log->checkout_log_id,
+                'staff_nama'      => $log->staff_nama,
+                'event_nama'      => $log->event_nama,
+                'tanggal'         => $log->tanggal->format('Y-m-d'),
+                'catatan'         => $log->catatan,
+                'created_at'      => $log->created_at->format('d M Y H:i'),
+                'has_return'      => $log->type === 'checkout' && $log->returnLog !== null,
+                'items'           => $log->items->map(fn($item) => [
                     'id'           => $item->id,
                     'nama_barang'  => $item->nama_barang,
                     'qty'          => $item->qty,

@@ -218,13 +218,16 @@ export default function Logistics() {
                                     onClick={() => setExpandedLog(expandedLog === log.id ? null : log.id)}
                                     className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition text-left gap-4">
                                     <div className="flex items-center gap-4 min-w-0">
-                                        <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center flex-shrink-0">
-                                            <svg className="w-5 h-5 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                                            </svg>
+                                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${log.type === 'return' ? 'bg-emerald-50' : 'bg-indigo-50'}`}>
+                                            <span className="text-base">{log.type === 'return' ? '🏠' : '🚗'}</span>
                                         </div>
                                         <div className="min-w-0">
-                                            <p className="font-semibold text-gray-900 text-sm">{log.staff_nama}</p>
+                                            <div className="flex items-center gap-2">
+                                                <p className="font-semibold text-gray-900 text-sm">{log.staff_nama}</p>
+                                                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${log.type === 'return' ? 'bg-emerald-50 text-emerald-600' : log.has_return ? 'bg-gray-100 text-gray-400' : 'bg-indigo-50 text-indigo-600'}`}>
+                                                    {log.type === 'return' ? 'Pulang' : log.has_return ? 'Selesai' : 'Berangkat'}
+                                                </span>
+                                            </div>
                                             <p className="text-xs text-gray-400">
                                                 {log.event_nama && <span className="mr-2">{log.event_nama} ·</span>}
                                                 {formatDate(log.tanggal)} · {log.created_at}
@@ -234,7 +237,7 @@ export default function Logistics() {
                                     <div className="flex items-center gap-4 flex-shrink-0">
                                         <div className="text-right">
                                             <p className="text-xs text-gray-400">{log.items.length} item</p>
-                                            <p className="text-sm font-bold text-indigo-600">{formatRp(log.total)}</p>
+                                            <p className={`text-sm font-bold ${log.type === 'return' ? 'text-emerald-600' : 'text-indigo-600'}`}>{formatRp(log.total)}</p>
                                         </div>
                                         <svg className={`w-4 h-4 text-gray-400 transition-transform ${expandedLog === log.id ? 'rotate-180' : ''}`}
                                             fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -249,7 +252,7 @@ export default function Logistics() {
                                             <thead>
                                                 <tr className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
                                                     <th className="text-left pb-2">Barang</th>
-                                                    <th className="text-center pb-2">Qty</th>
+                                                    <th className="text-center pb-2">{log.type === 'return' ? 'Sisa' : 'Qty'}</th>
                                                     <th className="text-right pb-2">Harga</th>
                                                     <th className="text-right pb-2">Subtotal</th>
                                                 </tr>

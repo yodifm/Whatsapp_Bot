@@ -108,9 +108,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/logistic-logs',               [LogisticController::class, 'logs']);
     Route::delete('/logistic-logs/{log}',      [LogisticController::class, 'destroyLog']);
 
-    // Logistic staff — staff submits their checklist before event
-    Route::get('/logistic-staff/items',        [LogisticStaffController::class, 'items']);
-    Route::post('/logistic-staff',             [LogisticStaffController::class, 'store']);
+    // Logistic staff — staff submits their checklist before/after event
+    Route::get('/logistic-staff/items',          [LogisticStaffController::class, 'items']);
+    Route::get('/logistic-staff/active-checkout',[LogisticStaffController::class, 'activeCheckout']);
+    Route::post('/logistic-staff',               [LogisticStaffController::class, 'store']);
 
     // Discounts
     Route::get('/discounts',               [DiscountController::class, 'index']);
