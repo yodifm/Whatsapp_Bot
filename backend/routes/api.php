@@ -3,6 +3,8 @@
 use App\Http\Controllers\BookingFormController;
 use App\Http\Controllers\Backend\AnalyticsController;
 use App\Http\Controllers\Backend\KioskController;
+use App\Http\Controllers\Backend\LogisticController;
+use App\Http\Controllers\Backend\LogisticStaffController;
 use App\Http\Controllers\Backend\AuthController;
 use App\Http\Controllers\Backend\BookingController;
 use App\Http\Controllers\Backend\BroadcastController;
@@ -95,6 +97,20 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/kiosks/{kiosk}',       [KioskController::class, 'update']);
     Route::patch('/kiosks/{kiosk}/toggle', [KioskController::class, 'toggle']);
     Route::delete('/kiosks/{kiosk}',    [KioskController::class, 'destroy']);
+
+    // Logistics — master inventory items
+    Route::get('/logistics',                   [LogisticController::class, 'index']);
+    Route::post('/logistics',                  [LogisticController::class, 'store']);
+    Route::put('/logistics/{logistic}',        [LogisticController::class, 'update']);
+    Route::delete('/logistics/{logistic}',     [LogisticController::class, 'destroy']);
+
+    // Logistic logs — staff event submissions (admin view)
+    Route::get('/logistic-logs',               [LogisticController::class, 'logs']);
+    Route::delete('/logistic-logs/{log}',      [LogisticController::class, 'destroyLog']);
+
+    // Logistic staff — staff submits their checklist before event
+    Route::get('/logistic-staff/items',        [LogisticStaffController::class, 'items']);
+    Route::post('/logistic-staff',             [LogisticStaffController::class, 'store']);
 
     // Discounts
     Route::get('/discounts',               [DiscountController::class, 'index']);
