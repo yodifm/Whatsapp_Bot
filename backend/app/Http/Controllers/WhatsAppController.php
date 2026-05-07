@@ -2,28 +2,14 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\ChatHistory;
-use App\Models\Customer;
-use App\Models\Faq;
+use App\Jobs\ProcessWhatsAppMessage;
 use App\Models\Kiosk;
-use App\Models\Package;
 use App\Models\Setting;
-use App\Services\AIService;
-use App\Services\InvoiceService;
-use App\Services\WhatsAppService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Throwable;
 
 class WhatsAppController extends Controller
 {
-    public function __construct(
-        private AIService       $ai,
-        private WhatsAppService $wa,
-        private InvoiceService  $invoiceService,
-    ) {}
-
-    // ─── GET /webhook/whatsapp ────────────────────────────────────────────────
     public function verify(Request $request): Response
     {
         $mode      = $request->query('hub_mode');
@@ -34,13 +20,11 @@ class WhatsAppController extends Controller
             return response('Forbidden', 403);
         }
 
-        // Check global setting
         $globalToken = Setting::get('wa_verify_token') ?: config('services.whatsapp.verify_token', '');
         if ($token === $globalToken) {
             return response($challenge, 200);
         }
 
-        // Check any active kiosk verify token
         if (Kiosk::where('aktif', true)->where('wa_verify_token', $token)->exists()) {
             return response($challenge, 200);
         }
@@ -48,7 +32,6 @@ class WhatsAppController extends Controller
         return response('Forbidden', 403);
     }
 
-    // ─── POST /webhook/whatsapp ───────────────────────────────────────────────
     public function handle(Request $request): Response
     {
         $payload = $request->input('entry.0.changes.0.value');
@@ -57,241 +40,15 @@ class WhatsAppController extends Controller
             return response('OK', 200);
         }
 
-        $msg         = $payload['messages'][0];
-        $waId        = $msg['from'];
-        $messageType = $msg['type'] ?? 'unknown';
-
-        // Resolve kiosk by phone_number_id from webhook metadata
+        // Resolve kiosk ID synchronously (fast DB lookup), then dispatch async
         $phoneNumberId = $payload['metadata']['phone_number_id'] ?? null;
-        $kiosk = $phoneNumberId
-            ? Kiosk::where('wa_phone_number_id', $phoneNumberId)->where('aktif', true)->first()
+        $kioskId       = $phoneNumberId
+            ? Kiosk::where('wa_phone_number_id', $phoneNumberId)->where('aktif', true)->value('id')
             : null;
 
-        // Build kiosk-aware WA service and AI context
-        $wa = $kiosk ? WhatsAppService::forKiosk($kiosk) : $this->wa;
+        ProcessWhatsAppMessage::dispatch($payload, $kioskId);
 
-        try {
-            $customer = Customer::firstOrCreate(
-                ['whatsapp_id' => $waId],
-                ['nama' => $payload['contacts'][0]['profile']['name'] ?? null],
-            );
-
-            if ($customer->status === 'new') {
-                $customer->update(['status' => 'interested']);
-            }
-
-            if ($messageType === 'image') {
-                $this->handleImageMessage($msg, $customer, $waId, $wa, $kiosk);
-                return response('OK', 200);
-            }
-
-            if ($messageType !== 'text') {
-                return response('OK', 200);
-            }
-
-            $userText = $msg['text']['body'];
-
-            ChatHistory::create([
-                'customer_id' => $customer->id,
-                'role'        => 'user',
-                'content'     => $userText,
-            ]);
-
-            if ($customer->ai_paused) {
-                return response('OK', 200);
-            }
-
-            $history  = $customer->chatHistories()
-                ->latest()->take(50)->get()->reverse()->values()->toArray();
-
-            $packages  = Package::where('aktif', true)->get()->toArray();
-            $faqs      = Faq::where('aktif', true)->orderBy('urutan')->get()->toArray();
-            $discounts = \App\Models\Discount::where('aktif', true)
-                ->where('berlaku_sampai', '>=', now()->toDateString())
-                ->get()->map(fn($d) => [
-                    'nama'           => $d->nama,
-                    'label'          => $d->label,
-                    'berlaku_sampai' => $d->berlaku_sampai->format('d M Y'),
-                ])->toArray();
-            $bookedDates = \App\Models\Booking::whereNotIn('status', ['cancelled'])
-                ->pluck('tanggal')
-                ->map(fn($d) => $d->format('Y-m-d'))
-                ->unique()->values()->toArray();
-
-            $rawReply = $this->ai->getReply($userText, $history, $packages, $faqs, $bookedDates, $discounts, $kiosk);
-
-            ['reply' => $aiReply, 'lead' => $lead] = $this->ai->extractLeadData($rawReply);
-
-            // Save lead data when AI collected all form fields
-            if ($lead && ! empty($lead['nama'])) {
-                $customer->update(['nama' => $lead['nama'], 'status' => 'interested']);
-                if (! empty($lead['tanggal'])) {
-                    \App\Models\Booking::updateOrCreate(
-                        ['customer_id' => $customer->id, 'status' => 'pending'],
-                        [
-                            'tanggal'    => $lead['tanggal'],
-                            'nama_acara' => $lead['acara'] ?? null,
-                            'catatan'    => isset($lead['lokasi']) ? 'Lokasi: ' . $lead['lokasi'] : null,
-                        ],
-                    );
-                }
-
-                // Send pricelist image after form complete
-                $pricelistUrl = url('images/pricelist.jpg');
-                $wa->sendImage(
-                    $waId,
-                    $pricelistUrl,
-                    "Berikut pricelist kami, apabila ada pertanyaan silakan yaa kak☺️"
-                );
-
-                ChatHistory::create([
-                    'customer_id' => $customer->id,
-                    'role'        => 'assistant',
-                    'content'     => '[Pricelist dikirim]',
-                ]);
-            }
-
-            $wa->sendText($waId, $aiReply);
-
-            ChatHistory::create([
-                'customer_id' => $customer->id,
-                'role'        => 'assistant',
-                'content'     => $aiReply,
-            ]);
-        } catch (Throwable $e) {
-            logger()->error('WhatsApp webhook error', [
-                'message' => $e->getMessage(),
-                'wa_id'   => $waId ?? null,
-            ]);
-        }
-
+        // Return 200 immediately — Meta requires a fast response or it retries
         return response('OK', 200);
-    }
-
-    private function handleImageMessage(array $msg, Customer $customer, string $waId, WhatsAppService $wa, ?Kiosk $kiosk = null): void
-    {
-        $mediaId  = $msg['image']['id']      ?? null;
-        $caption  = $msg['image']['caption'] ?? '';
-
-        ChatHistory::create([
-            'customer_id' => $customer->id,
-            'role'        => 'user',
-            'content'     => '[Gambar dikirim]' . ($caption ? ': ' . $caption : ''),
-        ]);
-
-        if ($customer->ai_paused) {
-            return;
-        }
-
-        if (! $mediaId) {
-            return;
-        }
-
-        try {
-            $accessToken = $kiosk
-                ? $kiosk->wa_access_token
-                : (Setting::get('wa_access_token') ?: config('services.whatsapp.access_token', ''));
-
-            // Step 1: Get media URL from WhatsApp
-            $http      = new \GuzzleHttp\Client(['timeout' => 15]);
-            $mediaResp = $http->get("https://graph.facebook.com/v19.0/{$mediaId}", [
-                'headers' => ['Authorization' => "Bearer {$accessToken}"],
-            ]);
-            $mediaData = json_decode($mediaResp->getBody()->getContents(), true);
-            $mediaUrl  = $mediaData['url'] ?? null;
-
-            if (! $mediaUrl) {
-                return;
-            }
-
-            // Step 2: Download image bytes
-            $imageResp  = $http->get($mediaUrl, [
-                'headers' => ['Authorization' => "Bearer {$accessToken}"],
-            ]);
-            $imageBytes = $imageResp->getBody()->getContents();
-            $mimeType   = $imageResp->getHeaderLine('Content-Type') ?: 'image/jpeg';
-            $base64     = base64_encode($imageBytes);
-
-            // Step 3: Send to Claude Vision for transfer verification
-            $result = $this->ai->verifyTransferImage($base64, $mimeType, $caption, $kiosk);
-
-            // Step 4: If verified, update status to dp_paid and send invoice
-            if ($result['verified']) {
-                $latestBooking = $customer->bookings()
-                    ->whereNotIn('status', ['cancelled', 'completed'])
-                    ->latest()
-                    ->first();
-
-                if ($latestBooking) {
-                    // Calculate dp_amount: use AI-detected amount or 50% of package price
-                    $dpAmount = $result['amount'];
-                    if (! $dpAmount && $latestBooking->package) {
-                        $dpAmount = (int) ($latestBooking->package->harga * 0.5);
-                    }
-
-                    $latestBooking->update([
-                        'dp_amount' => $dpAmount ?? $latestBooking->dp_amount,
-                        'status'    => 'dp_paid',
-                    ]);
-
-                    $customer->update(['status' => 'booked']);
-
-                    // Send confirmation message first
-                    $wa->sendText($waId, $result['reply']);
-
-                    ChatHistory::create([
-                        'customer_id' => $customer->id,
-                        'role'        => 'assistant',
-                        'content'     => $result['reply'],
-                    ]);
-
-                    // Generate and send DP invoice
-                    try {
-                        $invoiceUrl  = $this->invoiceService->generateDpInvoice($latestBooking->fresh(['customer', 'package']));
-                        $invoicePath = public_path(parse_url($invoiceUrl, PHP_URL_PATH));
-                        $filename    = 'Invoice-DP-' . str($latestBooking->customer->nama)->slug() . '.pdf';
-
-                        $wa->sendDocument(
-                            $waId,
-                            $invoicePath,
-                            $filename,
-                            "Invoice DP booking kamu sudah siap ya kak! Simpan sebagai bukti pembayaran 📄"
-                        );
-
-                        ChatHistory::create([
-                            'customer_id' => $customer->id,
-                            'role'        => 'assistant',
-                            'content'     => '[Invoice DP dikirim: ' . $filename . ']',
-                        ]);
-                    } catch (Throwable $invoiceErr) {
-                        logger()->error('Invoice send error', ['message' => $invoiceErr->getMessage()]);
-                    }
-
-                    // Ask about frame design reference
-                    $frameMsg = "Btw kak, untuk desain frame fotonya — ada referensi atau konsep tertentu yang diinginkan? Misalnya tema warna, font, atau contoh desain? 🎨\n\nKalau ada, kirim aja ke sini ya, nanti tim kami yang proses. Estimasi selesai 3 hari kerja. Kalau belum ada bayangan juga gapapa, tim kami bisa buatkan sesuai tema acara kamu 😊";
-
-                    $wa->sendText($waId, $frameMsg);
-                    ChatHistory::create([
-                        'customer_id' => $customer->id,
-                        'role'        => 'assistant',
-                        'content'     => $frameMsg,
-                    ]);
-
-                    return;
-                }
-
-                $customer->update(['status' => 'booked']);
-            }
-
-            $wa->sendText($waId, $result['reply']);
-
-            ChatHistory::create([
-                'customer_id' => $customer->id,
-                'role'        => 'assistant',
-                'content'     => $result['reply'],
-            ]);
-        } catch (Throwable $e) {
-            logger()->error('AI Vision error', ['message' => $e->getMessage()]);
-        }
     }
 }

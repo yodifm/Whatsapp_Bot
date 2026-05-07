@@ -5,9 +5,12 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Booking extends Model
 {
+    use SoftDeletes;
+
     protected $fillable = [
         'customer_id', 'package_id', 'no_whatsapp', 'email',
         'tanggal', 'jam_mulai', 'durasi_jam', 'nama_acara',

@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\NewBookingMail;
 use App\Models\Booking;
 use App\Models\Customer;
 use App\Models\Package;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 
 class BookingFormController extends Controller
 {
@@ -51,6 +53,21 @@ class BookingFormController extends Controller
             ]
         );
 
+        // Slot conflict check — prevent double-booking same date + start time
+        $conflict = Booking::where('tanggal', $validated['tanggal'])
+            ->where('jam_mulai', $validated['jam_mulai'])
+            ->whereNotIn('status', ['cancelled'])
+            ->exists();
+
+        if ($conflict) {
+            return response()->json([
+                'message' => 'Slot waktu tersebut sudah ada yang booking. Pilih tanggal atau jam yang berbeda ya.',
+                'errors'  => [
+                    'jam_mulai' => ['Slot waktu ini sudah terisi, silakan pilih jam yang berbeda.'],
+                ],
+            ], 422);
+        }
+
         $customer->update([
             'nama'        => $validated['nama'],
             'email'       => $validated['email'] ?? $customer->email,
@@ -73,6 +90,14 @@ class BookingFormController extends Controller
             'syarat_venue'      => true,
             'syarat_pembayaran' => true,
         ]);
+
+        $booking->load(['customer', 'package']);
+        try {
+            Mail::to(config('app.notify_email', 'waktunyaphotobooth@gmail.com'))
+                ->send(new NewBookingMail($booking));
+        } catch (\Throwable $e) {
+            logger()->error('New booking email error', ['message' => $e->getMessage()]);
+        }
 
         return response()->json([
             'message'    => 'Booking berhasil dikirim! Tim kami akan menghubungi kamu segera.',

@@ -15,6 +15,7 @@ import Bookings from '@/Pages/backend/Bookings';
 import Discounts from '@/Pages/backend/Discounts';
 import Broadcast from '@/Pages/backend/Broadcast';
 import Dashboard from '@/Pages/backend/Dashboard';
+import Users from '@/Pages/backend/Users';
 import Faqs from '@/Pages/backend/Faqs';
 import Gallery from '@/Pages/backend/Gallery';
 import Packages from '@/Pages/backend/Packages';
@@ -45,6 +46,7 @@ export default function App() {
                     <Route path="/logistics"       element={<PrivateRoute><Logistics /></PrivateRoute>} />
                     <Route path="/logistic-staff"  element={<PrivateRoute><LogisticStaff /></PrivateRoute>} />
                     <Route path="/sales"           element={<PrivateRoute><Sales /></PrivateRoute>} />
+                    <Route path="/users"           element={<PrivateRoute><Users /></PrivateRoute>} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
             </BrowserRouter>

@@ -2,6 +2,81 @@ import BackendLayout from '@/layouts/BackendLayout';
 import { useState, useEffect, useRef } from 'react';
 import api from '@/api/axios';
 
+function fmt(n) {
+    if (n == null) return '-';
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}jt`;
+    if (n >= 1_000) return `${(n / 1_000).toFixed(0)}rb`;
+    return String(n);
+}
+
+function KpiCard({ label, value, sub, color = 'text-gray-900', bg = 'bg-white', warn = false }) {
+    return (
+        <div className={`flex-1 min-w-0 ${bg} rounded-xl px-4 py-3 border ${warn ? 'border-red-200' : 'border-gray-200'} shadow-sm`}>
+            <p className="text-[11px] text-gray-400 font-medium truncate">{label}</p>
+            <p className={`text-xl font-bold mt-0.5 ${color}`}>{value}</p>
+            {sub && <p className={`text-[11px] mt-0.5 ${warn ? 'text-red-500' : 'text-gray-400'}`}>{sub}</p>}
+        </div>
+    );
+}
+
+function StatsBar() {
+    const [stats, setStats] = useState(null);
+
+    useEffect(() => {
+        api.get('/dashboard/stats').then(r => setStats(r.data)).catch(() => {});
+    }, []);
+
+    if (!stats) return (
+        <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 pt-4 pb-2">
+            <div className="h-16 rounded-xl bg-gray-100 animate-pulse" />
+        </div>
+    );
+
+    const growth = stats.revenue_growth;
+    const growthLabel = growth == null ? null : growth >= 0
+        ? `+${growth}% vs bln lalu`
+        : `${growth}% vs bln lalu`;
+
+    return (
+        <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 pt-4 pb-2">
+            <div className="flex gap-3">
+                <KpiCard
+                    label="Revenue Bulan Ini"
+                    value={`Rp ${fmt(stats.revenue_this_month)}`}
+                    sub={growthLabel ? <span className={growth >= 0 ? 'text-emerald-600' : 'text-red-500'}>{growthLabel}</span> : 'Bulan pertama'}
+                    color="text-indigo-700"
+                />
+                <KpiCard
+                    label="Booking Bulan Ini"
+                    value={stats.bookings_this_month}
+                    sub={`${stats.upcoming_count} acara minggu ini`}
+                />
+                <KpiCard
+                    label="Pending Konfirmasi"
+                    value={stats.pending_count}
+                    sub={stats.pending_count > 0 ? 'Perlu tindak lanjut' : 'Semua clear'}
+                    color={stats.pending_count > 0 ? 'text-amber-600' : 'text-gray-900'}
+                    bg={stats.pending_count > 0 ? 'bg-amber-50' : 'bg-white'}
+                />
+                <KpiCard
+                    label="DP Belum Masuk"
+                    value={stats.dp_warning_count}
+                    sub={stats.dp_warning_count > 0 ? 'Acara < 14 hari' : 'Semua clear'}
+                    color={stats.dp_warning_count > 0 ? 'text-red-600' : 'text-gray-900'}
+                    bg={stats.dp_warning_count > 0 ? 'bg-red-50' : 'bg-white'}
+                    warn={stats.dp_warning_count > 0}
+                />
+                <KpiCard
+                    label="Total Customer"
+                    value={stats.total_customers}
+                    sub={stats.new_customers > 0 ? `+${stats.new_customers} bulan ini` : 'Tidak ada baru'}
+                    color="text-violet-700"
+                />
+            </div>
+        </div>
+    );
+}
+
 const STATUS_CONFIG = {
     new:        { label: 'Baru',      color: 'bg-gray-100 text-gray-600',     dot: 'bg-gray-400' },
     interested: { label: 'Tertarik',  color: 'bg-blue-100 text-blue-700',     dot: 'bg-blue-500' },
@@ -160,7 +235,8 @@ export default function Dashboard() {
     return (
         <BackendLayout>
             <div className="h-[calc(100vh-56px)] flex flex-col">
-                <div className="flex-1 overflow-hidden mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-5">
+                <StatsBar />
+                <div className="flex-1 overflow-hidden mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 pb-5">
                     <div className="flex h-full rounded-2xl overflow-hidden shadow-sm border border-gray-200 bg-white">
 
                         {/* Sidebar */}

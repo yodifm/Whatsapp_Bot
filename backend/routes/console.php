@@ -10,3 +10,6 @@ Artisan::command('inspire', function () {
 
 // Cek follow-up setiap 15 menit
 Schedule::command('wa:followup')->everyFifteenMinutes();
+
+// Reminder H-7, H-3, H-1 setiap hari jam 09:00
+Schedule::command('wa:reminder')->dailyAt('09:00');

@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\Backend;
 
 use App\Http\Controllers\Controller;
+use App\Mail\NewBookingMail;
 use App\Models\Booking;
 use App\Services\WhatsAppService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 use Throwable;
 
 class BookingController extends Controller
@@ -168,6 +170,13 @@ class BookingController extends Controller
         $booking = Booking::create($validated);
         $booking->load(['customer', 'package']);
 
+        try {
+            Mail::to(config('app.notify_email', 'waktunyaphotobooth@gmail.com'))
+                ->send(new NewBookingMail($booking));
+        } catch (Throwable $e) {
+            logger()->error('New booking email error', ['message' => $e->getMessage()]);
+        }
+
         return response()->json($booking, 201);
     }
 
@@ -184,9 +193,89 @@ class BookingController extends Controller
             'dp_amount'   => 'nullable|integer|min:0',
         ]);
 
+        $prevStatus = $booking->status;
         $booking->update($validated);
+        $newStatus  = $booking->status;
+
+        if ($prevStatus !== $newStatus) {
+            if ($newStatus === 'dp_paid') {
+                $this->sendDesignReferenceQuestion($booking);
+            } elseif ($newStatus === 'confirmed') {
+                $this->sendStatusNotification($booking, 'confirmed');
+            } elseif ($newStatus === 'completed') {
+                $this->sendStatusNotification($booking, 'completed');
+            }
+        }
 
         return response()->json($booking->load(['customer', 'package']));
+    }
+
+    private function sendStatusNotification(Booking $booking, string $status): void
+    {
+        $booking->loadMissing(['customer', 'package']);
+        $waId = $booking->customer->whatsapp_id ?? null;
+        if (! $waId) {
+            return;
+        }
+
+        $nama  = $booking->customer->nama ?? 'Kak';
+        $paket = $booking->package?->nama ?? '-';
+        $tgl   = $booking->tanggal->format('d M Y');
+        $jam   = $booking->jam_mulai ?? '-';
+        $acara = $booking->nama_acara ?? '-';
+
+        $msg = match ($status) {
+            'confirmed' => "Halo *{$nama}*! 🎉\n\nBooking kamu sudah *dikonfirmasi* oleh tim kami ya kak!\n\n"
+                         . "📌 *Acara:* {$acara}\n📦 *Paket:* {$paket}\n📅 *Tanggal:* {$tgl}\n⏰ *Jam:* {$jam}\n\n"
+                         . "Selanjutnya, silakan lakukan pembayaran DP untuk mengunci jadwal ya kak 😊\n"
+                         . "Kalau ada pertanyaan, hubungi kami di sini!",
+            'completed' => "Halo *{$nama}*! 🌟\n\nTerima kasih sudah menggunakan layanan kami!\n\n"
+                         . "Acara *{$acara}* pada *{$tgl}* telah selesai. "
+                         . "Semoga momen yang kami abadikan menjadi kenangan indah ya kak 🥰\n\n"
+                         . "Kalau ada feedback atau ingin booking lagi, hubungi kami kapan saja!",
+        };
+
+        try {
+            $wa = app(WhatsAppService::class);
+            $wa->sendText($waId, $msg);
+
+            \App\Models\ChatHistory::create([
+                'customer_id' => $booking->customer_id,
+                'role'        => 'assistant',
+                'content'     => $msg,
+            ]);
+        } catch (Throwable $e) {
+            logger()->error('Status notification error', ['status' => $status, 'message' => $e->getMessage()]);
+        }
+    }
+
+    private function sendDesignReferenceQuestion(Booking $booking): void
+    {
+        $booking->loadMissing('customer');
+        $waId = $booking->customer->whatsapp_id ?? null;
+        if (! $waId) {
+            return;
+        }
+
+        try {
+            $wa  = app(WhatsAppService::class);
+            $msg = "Halo {$booking->customer->nama}! DP kamu sudah kami terima ya kak, terima kasih 🎉\n\n"
+                 . "Btw, untuk desain frame fotonya — ada referensi atau konsep tertentu yang diinginkan? "
+                 . "Misalnya tema warna, font, atau contoh desain? 🎨\n\n"
+                 . "Kalau ada, kirim aja ke sini ya, nanti tim kami yang proses. "
+                 . "Estimasi selesai 3 hari kerja. Kalau belum ada bayangan juga gapapa, "
+                 . "tim kami bisa buatkan sesuai tema acara kamu 😊";
+
+            $wa->sendText($waId, $msg);
+
+            \App\Models\ChatHistory::create([
+                'customer_id' => $booking->customer_id,
+                'role'        => 'assistant',
+                'content'     => $msg,
+            ]);
+        } catch (Throwable $e) {
+            logger()->error('Design reference question error', ['message' => $e->getMessage()]);
+        }
     }
 
     public function destroy(Booking $booking): JsonResponse

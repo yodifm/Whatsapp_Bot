@@ -15,8 +15,9 @@
     .invoice-meta { text-align: right; }
     .invoice-title { font-size: 26px; font-weight: 700; color: #4f46e5; letter-spacing: -1px; }
     .invoice-type { display: inline-block; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 99px; margin-top: 4px; letter-spacing: 0.5px; }
-    .invoice-type-dp { background: #d1fae5; color: #065f46; }
-    .invoice-type-full { background: #ede9fe; color: #5b21b6; }
+    .invoice-type-dp       { background: #d1fae5; color: #065f46; }
+    .invoice-type-full     { background: #ede9fe; color: #5b21b6; }
+    .invoice-type-proforma { background: #fef3c7; color: #92400e; }
     .invoice-num { font-size: 12px; color: #6b7280; margin-top: 5px; }
 
     /* Divider */
@@ -84,10 +85,12 @@
         </div>
         <div class="invoice-meta">
             <div class="invoice-title">INVOICE</div>
-            @if(($invoiceType ?? 'full') === 'dp')
+            @if(($invoiceType ?? 'proforma') === 'dp')
                 <div><span class="invoice-type invoice-type-dp">TANDA TERIMA DP</span></div>
-            @else
+            @elseif(($invoiceType ?? 'proforma') === 'full')
                 <div><span class="invoice-type invoice-type-full">INVOICE LUNAS</span></div>
+            @else
+                <div><span class="invoice-type invoice-type-proforma">TAGIHAN BOOKING</span></div>
             @endif
             <div class="invoice-num">#INV-{{ str_pad($booking->id, 4, '0', STR_PAD_LEFT) }}</div>
             <div class="invoice-num">Diterbitkan: {{ now()->translatedFormat('d F Y') }}</div>
@@ -192,13 +195,29 @@
         @endif
     </div>
 
-    {{-- Payment info box (DP invoice only) --}}
-    @if(($invoiceType ?? 'full') === 'dp' && $dp > 0)
+    {{-- Payment info box --}}
+    @if(($invoiceType ?? 'proforma') === 'dp' && $dp > 0)
     <div class="payment-box">
         <div class="payment-box-title">✓ Pembayaran DP Diterima</div>
         <div class="payment-row"><span class="label">Jumlah DP</span><span>Rp {{ number_format($dp, 0, ',', '.') }}</span></div>
         <div class="payment-row"><span class="label">Tanggal Diterima</span><span>{{ now()->translatedFormat('d F Y') }}</span></div>
         <div class="payment-row"><span class="label">Sisa Pelunasan</span><span style="color:#dc2626; font-weight:700">Rp {{ number_format($sisa, 0, ',', '.') }}</span></div>
+    </div>
+    @elseif(($invoiceType ?? 'proforma') === 'proforma' && $total > 0)
+    @php $dp50 = (int) round($total * 0.5); @endphp
+    <div style="background:#fffbeb; border:1px solid #fde68a; border-radius:6px; padding:14px 16px; margin-bottom:24px;">
+        <div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:#b45309; margin-bottom:8px;">
+            ⏳ Tagihan DP — Harap Segera Dibayarkan
+        </div>
+        <div style="display:flex; justify-content:space-between; font-size:13px; padding:3px 0; color:#374151;">
+            <span style="color:#6b7280;">Total Paket</span><span>Rp {{ number_format($total, 0, ',', '.') }}</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; font-size:14px; font-weight:700; padding:3px 0; color:#b45309;">
+            <span>DP 50% yang harus dibayar</span><span>Rp {{ number_format($dp50, 0, ',', '.') }}</span>
+        </div>
+        <div style="margin-top:6px; font-size:11px; color:#92400e;">
+            Batas pembayaran DP: paling lambat H-2 minggu sebelum acara
+        </div>
     </div>
     @endif
 
@@ -209,12 +228,20 @@
     </div>
     @endif
 
-    {{-- Bank account for remaining payment --}}
-    @php $sisa2 = max(0, ($booking->package ? $booking->package->harga : 0) - ($booking->dp_amount ?? 0)); @endphp
-    @if($sisa2 > 0 && !empty($bankName ?? '') && !empty($bankAccountNumber ?? ''))
+    {{-- Bank account for payment --}}
+    @php
+        $sisa2         = max(0, ($booking->package ? $booking->package->harga : 0) - ($booking->dp_amount ?? 0));
+        $transferLabel = ($invoiceType ?? 'proforma') === 'proforma'
+            ? 'Transfer DP 50% ke:'
+            : 'Transfer Sisa Pelunasan ke:';
+        $transferAmt   = ($invoiceType ?? 'proforma') === 'proforma'
+            ? (int) round($total * 0.5)
+            : $sisa2;
+    @endphp
+    @if($transferAmt > 0 && !empty($bankName ?? '') && !empty($bankAccountNumber ?? ''))
     <div style="background:#fffbeb; border:1px solid #fde68a; border-radius:6px; padding:14px 16px; margin-bottom:24px;">
         <div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:#b45309; margin-bottom:8px;">
-            💳 Transfer Sisa Pelunasan ke:
+            💳 {{ $transferLabel }}
         </div>
         <div style="display:flex; gap:24px; font-size:13px;">
             <div>
@@ -233,7 +260,11 @@
             @endif
         </div>
         <div style="margin-top:8px; font-size:11px; color:#92400e;">
-            Sisa pelunasan <strong>Rp {{ number_format($sisa2, 0, ',', '.') }}</strong> paling lambat H-1 sebelum acara.
+            @if(($invoiceType ?? 'proforma') === 'proforma')
+                DP <strong>Rp {{ number_format($transferAmt, 0, ',', '.') }}</strong> paling lambat H-2 minggu sebelum acara.
+            @else
+                Sisa pelunasan <strong>Rp {{ number_format($transferAmt, 0, ',', '.') }}</strong> paling lambat H-1 sebelum acara.
+            @endif
         </div>
     </div>
     @endif

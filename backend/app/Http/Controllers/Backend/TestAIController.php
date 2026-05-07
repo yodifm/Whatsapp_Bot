@@ -7,6 +7,7 @@ use App\Models\Booking;
 use App\Models\Customer;
 use App\Models\Discount;
 use App\Models\Faq;
+use App\Models\Kiosk;
 use App\Models\Package;
 use App\Services\AIService;
 use Illuminate\Http\JsonResponse;
@@ -21,44 +22,61 @@ class TestAIController extends Controller
             'history'           => 'array',
             'history.*.role'    => 'required|in:user,assistant',
             'history.*.content' => 'required|string',
+            'kiosk_id'          => 'nullable|exists:kiosks,id',
         ]);
 
-        $packages    = Package::where('aktif', true)->get()->toArray();
-        $faqs        = Faq::where('aktif', true)->orderBy('urutan')->get()->toArray();
-        $discounts   = Discount::where('aktif', true)
+        $kiosk = $request->filled('kiosk_id')
+            ? Kiosk::find($request->kiosk_id)
+            : null;
+
+        // Packages: global + kiosk-specific (mirrors production behaviour)
+        $packages = Package::where('aktif', true)
+            ->where(function ($q) use ($kiosk) {
+                $q->whereNull('kiosk_id');
+                if ($kiosk) $q->orWhere('kiosk_id', $kiosk->id);
+            })->get()->toArray();
+
+        $faqs = Faq::where('aktif', true)->orderBy('urutan')->get()->toArray();
+
+        $discounts = Discount::where('aktif', true)
             ->where('berlaku_sampai', '>=', now()->toDateString())
             ->get()->map(fn($d) => [
                 'nama'           => $d->nama,
                 'label'          => $d->label,
                 'berlaku_sampai' => $d->berlaku_sampai->format('d M Y'),
             ])->toArray();
-        $bookedDates = Booking::whereNotIn('status', ['cancelled'])
-            ->pluck('tanggal')
-            ->map(fn($d) => $d->format('Y-m-d'))
+
+        $bookedSlots = Booking::whereNotIn('status', ['cancelled'])
+            ->get(['tanggal', 'jam_mulai'])
+            ->map(fn($b) => $b->tanggal->format('Y-m-d') . ($b->jam_mulai ? ' jam ' . $b->jam_mulai : ''))
             ->unique()->values()->toArray();
 
         try {
-            $ai       = new AIService();
-            $rawReply = $ai->getReply(
+            $ai     = new AIService();
+            $result = $ai->getReply(
                 $request->message,
                 $request->history ?? [],
                 $packages,
                 $faqs,
-                $bookedDates,
+                $bookedSlots,
                 $discounts,
+                $kiosk,
             );
 
-            ['reply' => $reply, 'lead' => $lead] = $ai->extractLeadData($rawReply);
+            $reply    = $result['reply'];
+            $leadData = $result['leadData'];
 
             $savedLead = null;
-            if ($lead && ! empty($lead['nama'])) {
-                $savedLead = $this->saveLead($lead);
+            if ($leadData && ! empty($leadData['nama'])) {
+                $savedLead = $this->saveLead($leadData);
             }
 
             return response()->json([
                 'reply'         => $reply,
                 'lead_saved'    => $savedLead,
                 'pricelist_url' => $savedLead ? url('images/pricelist.jpg') : null,
+                'model'         => $result['model'],
+                'usage'         => $result['usage'],
             ]);
         } catch (\Throwable $e) {
             return response()->json(['error' => $e->getMessage()], 500);
@@ -71,7 +89,6 @@ class TestAIController extends Controller
             ['whatsapp_id' => 'sandbox_' . strtolower(str_replace(' ', '_', $lead['nama']))],
             ['nama' => $lead['nama'], 'status' => 'interested'],
         );
-
         $customer->update(['nama' => $lead['nama'], 'status' => 'interested']);
 
         $booking = null;

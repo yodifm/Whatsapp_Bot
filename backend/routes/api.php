@@ -7,6 +7,7 @@ use App\Http\Controllers\Backend\LogisticController;
 use App\Http\Controllers\Backend\LogisticStaffController;
 use App\Http\Controllers\Backend\SalesController;
 use App\Http\Controllers\Backend\AuthController;
+use App\Http\Controllers\Backend\UserController;
 use App\Http\Controllers\Backend\BookingController;
 use App\Http\Controllers\Backend\BroadcastController;
 use App\Http\Controllers\Backend\CustomerController;
@@ -44,6 +45,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/user',    [AuthController::class, 'me']);
 
+    // User management (admin only — enforced inside controller)
+    Route::get('/users',           [UserController::class, 'index']);
+    Route::post('/users',          [UserController::class, 'store']);
+    Route::put('/users/{user}',    [UserController::class, 'update']);
+    Route::delete('/users/{user}', [UserController::class, 'destroy']);
+
+    Route::get('/dashboard/stats',         [DashboardController::class, 'stats']);
     Route::get('/customers',               [DashboardController::class, 'customers']);
     Route::get('/customers/{id}/messages', [DashboardController::class, 'messages']);
 
@@ -83,8 +91,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/bookings/{booking}',           [BookingController::class, 'destroy']);
 
     // Invoice PDF
-    Route::get('/bookings/{booking}/invoice',         [InvoiceController::class, 'download']);
-    Route::get('/bookings/{booking}/invoice/preview', [InvoiceController::class, 'preview']);
+    Route::get('/bookings/{booking}/invoice',          [InvoiceController::class, 'download']);
+    Route::get('/bookings/{booking}/invoice/preview',  [InvoiceController::class, 'preview']);
+    Route::post('/bookings/{booking}/send-invoice',    [InvoiceController::class, 'sendViaWa']);
 
     // FAQ
     Route::get('/faqs',           [FaqController::class, 'index']);
@@ -102,7 +111,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/kiosks',               [KioskController::class, 'index']);
     Route::post('/kiosks',              [KioskController::class, 'store']);
     Route::put('/kiosks/{kiosk}',       [KioskController::class, 'update']);
-    Route::patch('/kiosks/{kiosk}/toggle', [KioskController::class, 'toggle']);
+    Route::patch('/kiosks/{kiosk}/toggle',    [KioskController::class, 'toggle']);
+    Route::patch('/kiosks/{kiosk}/toggle-ai', [KioskController::class, 'toggleAi']);
     Route::delete('/kiosks/{kiosk}',    [KioskController::class, 'destroy']);
 
     // Logistics — master inventory items

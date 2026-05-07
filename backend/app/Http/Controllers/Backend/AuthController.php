@@ -28,7 +28,10 @@ class AuthController extends Controller
 
         $token = $user->createToken('spa')->plainTextToken;
 
-        return response()->json(['token' => $token, 'user' => ['name' => $user->name, 'email' => $user->email]]);
+        return response()->json([
+            'token' => $token,
+            'user'  => ['name' => $user->name, 'email' => $user->email, 'role' => $user->role],
+        ]);
     }
 
     public function logout(Request $request): JsonResponse
@@ -40,6 +43,7 @@ class AuthController extends Controller
 
     public function me(Request $request): JsonResponse
     {
-        return response()->json(['name' => $request->user()->name, 'email' => $request->user()->email]);
+        $u = $request->user();
+        return response()->json(['name' => $u->name, 'email' => $u->email, 'role' => $u->role]);
     }
 }

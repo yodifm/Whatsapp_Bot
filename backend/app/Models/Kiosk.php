@@ -10,11 +10,12 @@ class Kiosk extends Model
         'name', 'wa_phone_number_id', 'wa_access_token', 'wa_verify_token',
         'ai_name', 'ai_tone', 'studio_name',
         'bank_name', 'bank_account_number', 'bank_account_holder',
-        'aktif',
+        'aktif', 'ai_enabled',
     ];
 
     protected $casts = [
-        'aktif' => 'boolean',
+        'aktif'      => 'boolean',
+        'ai_enabled' => 'boolean',
     ];
 
     protected $hidden = [

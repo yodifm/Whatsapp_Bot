@@ -108,6 +108,15 @@ export default function Kiosks() {
         } catch { /* ignore */ }
     };
 
+    const handleToggleAi = async (k) => {
+        try {
+            await api.patch(`/kiosks/${k.id}/toggle-ai`);
+            setKiosks(prev => prev.map(item =>
+                item.id === k.id ? { ...item, ai_enabled: !item.ai_enabled } : item
+            ));
+        } catch { /* ignore */ }
+    };
+
     const handleDelete = async () => {
         if (!deleteTarget) return;
         try {
@@ -209,10 +218,27 @@ export default function Kiosks() {
                                     )}
                                 </div>
 
+                                {/* AI toggle row */}
+                                <div className="pt-1 border-t border-gray-50">
+                                    <button onClick={() => handleToggleAi(k)}
+                                        className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-medium transition-colors
+                                            ${k.ai_enabled
+                                                ? 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+                                                : 'bg-amber-50 text-amber-700 hover:bg-amber-100'}`}>
+                                        <span className="flex items-center gap-2">
+                                            <span className="text-base">{k.ai_enabled ? '🤖' : '👤'}</span>
+                                            <span>{k.ai_enabled ? 'AI Aktif' : 'Mode Human'}</span>
+                                        </span>
+                                        <div className={`w-9 h-5 rounded-full relative transition-colors ${k.ai_enabled ? 'bg-indigo-400' : 'bg-gray-300'}`}>
+                                            <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${k.ai_enabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                                        </div>
+                                    </button>
+                                </div>
+
                                 {/* Status + Actions */}
-                                <div className="flex items-center justify-between pt-1 border-t border-gray-50">
+                                <div className="flex items-center justify-between">
                                     <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${k.aktif ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'}`}>
-                                        {k.aktif ? 'Aktif' : 'Nonaktif'}
+                                        {k.aktif ? 'Kiosk Aktif' : 'Kiosk Nonaktif'}
                                     </span>
                                     <div className="flex items-center gap-1">
                                         <button onClick={() => openEdit(k)}

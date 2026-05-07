@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Cache;
 
 class Setting extends Model
 {
@@ -14,11 +15,20 @@ class Setting extends Model
 
     public static function get(string $key, string $default = ''): string
     {
-        return static::where('key', $key)->value('value') ?? $default;
+        return static::all_cached()[$key] ?? $default;
     }
 
     public static function set(string $key, string $value): void
     {
         static::updateOrCreate(['key' => $key], ['value' => $value]);
+        Cache::forget('settings:all');
+    }
+
+    /** All settings, cached for 5 minutes. */
+    public static function all_cached(): array
+    {
+        return Cache::remember('settings:all', 300, fn() =>
+            static::pluck('value', 'key')->toArray()
+        );
     }
 }

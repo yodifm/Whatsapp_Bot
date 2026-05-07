@@ -1,14 +1,14 @@
 import BackendLayout from '@/layouts/BackendLayout';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import api from '@/api/axios';
 
-const EMPTY = { nama: '', harga: '', durasi_jam: '', fitur: '', aktif: true };
+const EMPTY = { kiosk_id: '', nama: '', harga: '', durasi_jam: '', fitur: '', aktif: true };
 
 function formatRupiah(n) {
     return 'Rp ' + Number(n).toLocaleString('id-ID');
 }
 
-function Modal({ pkg, onClose, onSave }) {
+function Modal({ pkg, kiosks, onClose, onSave }) {
     const [form, setForm]     = useState(pkg ?? EMPTY);
     const [errors, setErrors] = useState({});
     const [saving, setSaving] = useState(false);
@@ -22,6 +22,7 @@ function Modal({ pkg, onClose, onSave }) {
         try {
             const payload = {
                 ...form,
+                kiosk_id:   form.kiosk_id ? Number(form.kiosk_id) : null,
                 harga:      parseInt(form.harga) || 0,
                 durasi_jam: parseInt(form.durasi_jam) || 1,
                 fitur: typeof form.fitur === 'string'
@@ -56,6 +57,20 @@ function Modal({ pkg, onClose, onSave }) {
                     </button>
                 </div>
                 <form onSubmit={submit} className="px-6 py-5 space-y-4">
+
+                    {/* Kiosk assignment */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Kiosk</label>
+                        <select value={form.kiosk_id ?? ''} onChange={e => set('kiosk_id', e.target.value)}
+                            className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400 transition">
+                            <option value="">🌐 Semua Kiosk (Global)</option>
+                            {kiosks.map(k => (
+                                <option key={k.id} value={k.id}>📱 {k.name}</option>
+                            ))}
+                        </select>
+                        <p className="mt-1 text-xs text-gray-400">Pilih kiosk spesifik atau biarkan global untuk semua kiosk</p>
+                    </div>
+
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Nama Paket</label>
                         <input value={form.nama} onChange={e => set('nama', e.target.value)}
@@ -108,12 +123,67 @@ function Modal({ pkg, onClose, onSave }) {
     );
 }
 
+function PackageCard({ pkg, onEdit, onDelete, onToggle, deleting }) {
+    return (
+        <div className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition ${pkg.aktif ? 'border-gray-200' : 'border-gray-100 opacity-60'}`}>
+            <div className="px-5 pt-5 pb-4">
+                <div className="flex items-start justify-between gap-2 mb-3">
+                    <div>
+                        <h3 className="font-bold text-gray-900">{pkg.nama}</h3>
+                        <p className="text-2xl font-bold text-indigo-600 mt-1">{formatRupiah(pkg.harga)}</p>
+                    </div>
+                    <span className={`text-xs font-medium px-2 py-1 rounded-full flex-shrink-0 ${pkg.aktif ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
+                        {pkg.aktif ? 'Aktif' : 'Nonaktif'}
+                    </span>
+                </div>
+                <div className="flex items-center gap-1.5 text-sm text-gray-500 mb-4">
+                    <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    {pkg.durasi_jam} jam
+                </div>
+                {pkg.fitur?.length > 0 && (
+                    <ul className="space-y-1.5">
+                        {pkg.fitur.map((f, i) => (
+                            <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
+                                <svg className="w-4 h-4 text-indigo-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                </svg>
+                                {f}
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </div>
+            <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between">
+                <button onClick={() => onToggle(pkg)} className="text-xs text-gray-400 hover:text-gray-700 transition">
+                    {pkg.aktif ? 'Nonaktifkan' : 'Aktifkan'}
+                </button>
+                <div className="flex gap-2">
+                    <button onClick={() => onEdit(pkg)}
+                        className="text-xs font-medium text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition">
+                        Edit
+                    </button>
+                    <button onClick={() => onDelete(pkg.id)} disabled={deleting === pkg.id}
+                        className="text-xs font-medium text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition disabled:opacity-50">
+                        {deleting === pkg.id ? '...' : 'Hapus'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export default function Packages() {
     const [packages, setPackages] = useState([]);
-    const [modal, setModal]       = useState(null); // null | {} | {id,...}
-    const [deleting, setDeleting] = useState(null);
+    const [kiosks,   setKiosks]   = useState([]);
+    const [modal,    setModal]     = useState(null);
+    const [deleting, setDeleting]  = useState(null);
 
-    useEffect(() => { api.get('/packages').then(r => setPackages(r.data)); }, []);
+    useEffect(() => {
+        api.get('/packages').then(r => setPackages(r.data));
+        api.get('/kiosks').then(r => setKiosks(r.data));
+    }, []);
 
     const handleSave = (pkg, mode) => {
         setPackages(prev => mode === 'create'
@@ -136,6 +206,22 @@ export default function Packages() {
         setPackages(prev => prev.map(p => p.id === pkg.id ? r.data : p));
     };
 
+    const openEdit = (pkg) => setModal({ ...pkg, fitur: pkg.fitur?.join('\n') ?? '' });
+
+    // Group packages: global first, then per kiosk
+    const grouped = useMemo(() => {
+        const global = packages.filter(p => !p.kiosk_id);
+        const byKiosk = kiosks.map(k => ({
+            kiosk: k,
+            items: packages.filter(p => p.kiosk_id === k.id),
+        })).filter(g => g.items.length > 0);
+        return { global, byKiosk };
+    }, [packages, kiosks]);
+
+    const cardProps = { onEdit: openEdit, onDelete: handleDelete, onToggle: toggleAktif, deleting };
+
+    const isEmpty = packages.length === 0;
+
     return (
         <BackendLayout>
             <div className="py-8 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto">
@@ -153,7 +239,7 @@ export default function Packages() {
                     </button>
                 </div>
 
-                {packages.length === 0 ? (
+                {isEmpty ? (
                     <div className="bg-white rounded-2xl border border-gray-200 shadow-sm flex flex-col items-center justify-center py-20 text-center">
                         <div className="w-14 h-14 rounded-2xl bg-indigo-50 flex items-center justify-center mb-4">
                             <svg className="w-7 h-7 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -168,64 +254,50 @@ export default function Packages() {
                         </button>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {packages.map(pkg => (
-                            <div key={pkg.id} className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition ${pkg.aktif ? 'border-gray-200' : 'border-gray-100 opacity-60'}`}>
-                                <div className="px-5 pt-5 pb-4">
-                                    <div className="flex items-start justify-between gap-2 mb-3">
-                                        <div>
-                                            <h3 className="font-bold text-gray-900">{pkg.nama}</h3>
-                                            <p className="text-2xl font-bold text-indigo-600 mt-1">
-                                                {formatRupiah(pkg.harga)}
-                                            </p>
-                                        </div>
-                                        <span className={`text-xs font-medium px-2 py-1 rounded-full flex-shrink-0 ${pkg.aktif ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
-                                            {pkg.aktif ? 'Aktif' : 'Nonaktif'}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5 text-sm text-gray-500 mb-4">
-                                        <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
-                                        {pkg.durasi_jam} jam
-                                    </div>
-                                    {pkg.fitur?.length > 0 && (
-                                        <ul className="space-y-1.5">
-                                            {pkg.fitur.map((f, i) => (
-                                                <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
-                                                    <svg className="w-4 h-4 text-indigo-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                                    </svg>
-                                                    {f}
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    )}
+                    <div className="space-y-8">
+
+                        {/* Global packages */}
+                        {grouped.global.length > 0 && (
+                            <section>
+                                <div className="flex items-center gap-2 mb-4">
+                                    <span className="text-base">🌐</span>
+                                    <h3 className="font-semibold text-gray-800 text-sm">Semua Kiosk</h3>
+                                    <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{grouped.global.length} paket</span>
                                 </div>
-                                <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between">
-                                    <button onClick={() => toggleAktif(pkg)}
-                                        className="text-xs text-gray-400 hover:text-gray-700 transition">
-                                        {pkg.aktif ? 'Nonaktifkan' : 'Aktifkan'}
-                                    </button>
-                                    <div className="flex gap-2">
-                                        <button onClick={() => setModal({ ...pkg, fitur: pkg.fitur?.join('\n') ?? '' })}
-                                            className="text-xs font-medium text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition">
-                                            Edit
-                                        </button>
-                                        <button onClick={() => handleDelete(pkg.id)} disabled={deleting === pkg.id}
-                                            className="text-xs font-medium text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition disabled:opacity-50">
-                                            {deleting === pkg.id ? '...' : 'Hapus'}
-                                        </button>
-                                    </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {grouped.global.map(pkg => (
+                                        <PackageCard key={pkg.id} pkg={pkg} {...cardProps} />
+                                    ))}
                                 </div>
-                            </div>
+                            </section>
+                        )}
+
+                        {/* Per-kiosk groups */}
+                        {grouped.byKiosk.map(({ kiosk, items }) => (
+                            <section key={kiosk.id}>
+                                <div className="flex items-center gap-2 mb-4">
+                                    <span className="text-base">📱</span>
+                                    <h3 className="font-semibold text-gray-800 text-sm">{kiosk.name}</h3>
+                                    <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{items.length} paket</span>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {items.map(pkg => (
+                                        <PackageCard key={pkg.id} pkg={pkg} {...cardProps} />
+                                    ))}
+                                </div>
+                            </section>
                         ))}
                     </div>
                 )}
             </div>
 
             {modal !== null && (
-                <Modal pkg={modal?.id ? modal : null} onClose={() => setModal(null)} onSave={handleSave} />
+                <Modal
+                    pkg={modal?.id ? modal : null}
+                    kiosks={kiosks}
+                    onClose={() => setModal(null)}
+                    onSave={handleSave}
+                />
             )}
         </BackendLayout>
     );

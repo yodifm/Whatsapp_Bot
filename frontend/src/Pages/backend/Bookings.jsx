@@ -38,6 +38,7 @@ export default function Bookings() {
     const [editBooking,  setEditBooking]  = useState(null);
     const [saving,       setSaving]       = useState(false);
     const [error,        setError]        = useState('');
+    const [sendingWa,    setSendingWa]    = useState(null); // booking id being sent
 
     const [form, setForm] = useState({
         customer_id: '', package_id: '', tanggal: '', jam_mulai: '',
@@ -142,6 +143,18 @@ export default function Bookings() {
 
     const downloadInvoice = (id) => {
         window.open(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/bookings/${id}/invoice`, '_blank');
+    };
+
+    const sendInvoiceWa = async (id) => {
+        setSendingWa(id);
+        try {
+            await api.post(`/bookings/${id}/send-invoice`);
+            alert('Invoice berhasil dikirim ke WhatsApp customer!');
+        } catch (err) {
+            alert(err.response?.data?.message || 'Gagal mengirim invoice.');
+        } finally {
+            setSendingWa(null);
+        }
     };
 
     if (loading) return (
@@ -263,11 +276,16 @@ export default function Bookings() {
                                                         {b.jam_mulai} {b.durasi_jam ? `· ${b.durasi_jam} jam` : ''}
                                                     </p>
                                                 )}
-                                                <div className="flex gap-2 pt-1">
+                                                <div className="flex flex-wrap gap-2 pt-1">
                                                     <button onClick={() => openEdit(b)}
                                                         className="text-xs text-indigo-600 hover:underline">Edit</button>
                                                     <button onClick={() => downloadInvoice(b.id)}
                                                         className="text-xs text-gray-500 hover:text-gray-700">Invoice</button>
+                                                    <button onClick={() => sendInvoiceWa(b.id)}
+                                                        disabled={sendingWa === b.id}
+                                                        className="text-xs text-emerald-600 hover:underline disabled:opacity-50">
+                                                        {sendingWa === b.id ? 'Mengirim...' : 'Kirim WA'}
+                                                    </button>
                                                     <button onClick={() => handleDelete(b.id)}
                                                         className="text-xs text-red-500 hover:underline ml-auto">Hapus</button>
                                                 </div>

@@ -113,7 +113,13 @@ export default function BookingForm() {
             window.scrollTo({ top: 0, behavior: 'smooth' });
         } catch (err) {
             if (err.response?.status === 422) {
-                setErrors(err.response.data.errors || {});
+                const errs = err.response.data.errors || {};
+                setErrors(errs);
+                // jam_mulai/tanggal conflict → jump back to step 1
+                if (errs.jam_mulai || errs.tanggal) {
+                    setStep(1);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
             } else {
                 setErrors({ general: 'Terjadi kesalahan, coba lagi ya.' });
             }

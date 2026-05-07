@@ -25,6 +25,7 @@ class KioskController extends Controller
                 'bank_account_number' => $k->bank_account_number,
                 'bank_account_holder' => $k->bank_account_holder,
                 'aktif'               => $k->aktif,
+                'ai_enabled'          => $k->ai_enabled,
                 'created_at'          => $k->created_at->format('d M Y'),
             ])
         );
@@ -45,7 +46,7 @@ class KioskController extends Controller
             'bank_account_holder' => 'nullable|string|max:100',
         ]);
 
-        $kiosk = Kiosk::create($validated + ['aktif' => true]);
+        $kiosk = Kiosk::create($validated + ['aktif' => true, 'ai_enabled' => true]);
 
         return response()->json(['message' => 'Kiosk berhasil dibuat.', 'id' => $kiosk->id], 201);
     }
@@ -80,6 +81,13 @@ class KioskController extends Controller
         $kiosk->update(['aktif' => ! $kiosk->aktif]);
 
         return response()->json(['aktif' => $kiosk->aktif]);
+    }
+
+    public function toggleAi(Kiosk $kiosk): JsonResponse
+    {
+        $kiosk->update(['ai_enabled' => ! $kiosk->ai_enabled]);
+
+        return response()->json(['ai_enabled' => $kiosk->ai_enabled]);
     }
 
     public function destroy(Kiosk $kiosk): JsonResponse
