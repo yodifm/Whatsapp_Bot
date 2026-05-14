@@ -1,6 +1,8 @@
 import BackendLayout from '@/layouts/BackendLayout';
 import { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import api from '@/api/axios';
+import { Skeleton } from '@/components/Skeleton';
 
 function fmt(n) {
     if (n == null) return '-';
@@ -28,7 +30,15 @@ function StatsBar() {
 
     if (!stats) return (
         <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 pt-4 pb-2">
-            <div className="h-16 rounded-xl bg-gray-100 animate-pulse" />
+            <div className="flex gap-3">
+                {[...Array(5)].map((_, i) => (
+                    <div key={i} className="flex-1 bg-white rounded-xl border border-gray-200 px-4 py-3 space-y-2">
+                        <Skeleton className="h-2.5 w-20 rounded-full" />
+                        <Skeleton className="h-6 w-16 rounded-full" />
+                        <Skeleton className="h-2 w-24 rounded-full" />
+                    </div>
+                ))}
+            </div>
         </div>
     );
 
@@ -72,6 +82,73 @@ function StatsBar() {
                     sub={stats.new_customers > 0 ? `+${stats.new_customers} bulan ini` : 'Tidak ada baru'}
                     color="text-violet-700"
                 />
+            </div>
+        </div>
+    );
+}
+
+const BOOKING_STATUS_COLORS = {
+    pending:   'bg-amber-100 text-amber-700',
+    confirmed: 'bg-blue-100 text-blue-700',
+    dp_paid:   'bg-indigo-100 text-indigo-700',
+    completed: 'bg-green-100 text-green-700',
+    cancelled: 'bg-red-100 text-red-500',
+};
+
+function UpcomingEvents() {
+    const [events, setEvents] = useState([]);
+
+    useEffect(() => {
+        const today = new Date();
+        const bulan = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+        api.get('/bookings', { params: { bulan } })
+            .then(r => {
+                const todayStr = today.toISOString().slice(0, 10);
+                const upcoming = r.data
+                    .filter(b => b.tanggal >= todayStr && b.status !== 'cancelled')
+                    .sort((a, b) => a.tanggal.localeCompare(b.tanggal))
+                    .slice(0, 7);
+                setEvents(upcoming);
+            })
+            .catch(() => {});
+    }, []);
+
+    if (!events.length) return null;
+
+    return (
+        <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 pb-2">
+            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+                {events.map(ev => {
+                    const date = new Date(ev.tanggal + 'T00:00:00');
+                    const daysUntil = Math.round((date - new Date().setHours(0,0,0,0)) / 86400000);
+                    const dayLabel = daysUntil === 0 ? 'Hari ini' : daysUntil === 1 ? 'Besok' : `${daysUntil}h lagi`;
+                    const isUrgent = daysUntil <= 2;
+                    const stColor = BOOKING_STATUS_COLORS[ev.status] ?? 'bg-gray-100 text-gray-600';
+                    return (
+                        <div key={ev.id}
+                            className={`flex-shrink-0 flex items-center gap-2.5 px-3 py-2 rounded-xl border text-xs font-medium transition
+                                ${isUrgent ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-200'}`}>
+                            <div className="text-center leading-tight">
+                                <p className={`font-bold text-[11px] ${isUrgent ? 'text-amber-600' : 'text-indigo-600'}`}>
+                                    {date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
+                                </p>
+                                <p className={`text-[10px] ${isUrgent ? 'text-amber-500' : 'text-gray-400'}`}>{dayLabel}</p>
+                            </div>
+                            <div className="min-w-0">
+                                <p className="font-semibold text-gray-800 truncate max-w-[120px]">
+                                    {ev.nama_acara || ev.customer?.nama || '-'}
+                                </p>
+                                <p className="text-gray-400 text-[10px]">
+                                    {ev.jam_mulai ? ev.jam_mulai.substring(0, 5) : '—'}
+                                    {ev.customer?.nama && ev.nama_acara ? ` · ${ev.customer.nama}` : ''}
+                                </p>
+                            </div>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${stColor}`}>
+                                {ev.status.replace('_', ' ')}
+                            </span>
+                        </div>
+                    );
+                })}
             </div>
         </div>
     );
@@ -128,28 +205,34 @@ function CustomerItem({ customer, isActive, onClick }) {
 }
 
 function ChatBubble({ message }) {
-    const isUser     = message.role === 'user';
+    const isCustomer = message.role === 'user';   // customer → LEFT (incoming)
+    const isBot      = message.role === 'assistant'; // bot/admin → RIGHT (outgoing)
     const isFollowup = message.content?.startsWith('[Follow-up otomatis]');
     return (
-        <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
-            {!isUser && (
-                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-[10px] font-bold mr-2 flex-shrink-0 self-end mb-1 shadow-sm">
-                    {isFollowup ? '⏰' : 'AI'}
+        <div className={`flex ${isCustomer ? 'justify-start' : 'justify-end'} mb-4`}>
+            {isCustomer && (
+                <div className="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 text-[10px] font-bold mr-2 flex-shrink-0 self-end mb-1 shadow-sm">
+                    C
                 </div>
             )}
-            <div className={`max-w-[68%] flex flex-col ${isUser ? 'items-end' : 'items-start'}`}>
+            <div className={`max-w-[68%] flex flex-col ${isCustomer ? 'items-start' : 'items-end'}`}>
                 <div className={`px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap break-words shadow-sm ${
-                    isUser
-                        ? 'bg-indigo-600 text-white rounded-2xl rounded-br-md'
+                    isCustomer
+                        ? 'bg-white text-gray-800 rounded-2xl rounded-tl-md border border-gray-100'
                         : isFollowup
-                            ? 'bg-orange-50 text-orange-800 border border-orange-200 rounded-2xl rounded-bl-md'
-                            : 'bg-white text-gray-800 rounded-2xl rounded-bl-md border border-gray-100'
+                            ? 'bg-orange-50 text-orange-800 border border-orange-200 rounded-2xl rounded-tr-md'
+                            : 'bg-indigo-600 text-white rounded-2xl rounded-tr-md'
                 }`}>
                     {isFollowup ? message.content.replace('[Follow-up otomatis] ', '') : message.content}
-                    {isFollowup && <span className="block text-[10px] text-orange-400 mt-1">⏰ Follow-up otomatis</span>}
+                    {isFollowup && <span className="block text-[10px] text-orange-300 mt-1">⏰ Follow-up otomatis</span>}
                 </div>
                 <span className="text-[11px] text-gray-400 mt-1 px-1">{message.created_at}</span>
             </div>
+            {isBot && !isFollowup && (
+                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-[10px] font-bold ml-2 flex-shrink-0 self-end mb-1 shadow-sm">
+                    AI
+                </div>
+            )}
         </div>
     );
 }
@@ -183,6 +266,24 @@ function StatusDropdown({ status, onChange }) {
     );
 }
 
+const PERIOD_OPTIONS = [
+    { key: 'all',   label: 'Semua' },
+    { key: 'today', label: 'Hari ini' },
+    { key: '7d',    label: '7 Hari' },
+    { key: '30d',   label: 'Bulan ini' },
+];
+
+function periodMatches(lastMessageAt, period) {
+    if (period === 'all' || !lastMessageAt) return true;
+    const d = new Date(lastMessageAt);
+    const now = new Date();
+    if (period === 'today') {
+        return d.toDateString() === now.toDateString();
+    }
+    const days = period === '7d' ? 7 : 30;
+    return (now - d) / (1000 * 60 * 60 * 24) <= days;
+}
+
 export default function Dashboard() {
     const [customers, setCustomers]               = useState([]);
     const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -190,7 +291,11 @@ export default function Dashboard() {
     const [loadingMsgs, setLoadingMsgs]           = useState(false);
     const [search, setSearch]                     = useState('');
     const [filterStatus, setFilterStatus]         = useState('all');
+    const [filterPeriod, setFilterPeriod]         = useState('all');
+    const [sendText, setSendText]                 = useState('');
+    const [sending, setSending]                   = useState(false);
     const bottomRef = useRef(null);
+    const inputRef  = useRef(null);
 
     useEffect(() => {
         api.get('/customers').then(r => setCustomers(r.data));
@@ -226,16 +331,31 @@ export default function Dashboard() {
         updateCustomer(selectedCustomer.id, { ai_paused: r.data.ai_paused });
     };
 
+    const handleSend = async () => {
+        if (!sendText.trim() || sending) return;
+        setSending(true);
+        try {
+            const r = await api.post(`/customers/${selectedCustomer.id}/send`, { message: sendText.trim() });
+            setMessages(prev => [...prev, r.data]);
+            setSendText('');
+            inputRef.current?.focus();
+        } finally {
+            setSending(false);
+        }
+    };
+
     const filtered = customers.filter(c => {
         const matchSearch = (c.nama ?? '').toLowerCase().includes(search.toLowerCase()) || c.whatsapp_id.includes(search);
         const matchStatus = filterStatus === 'all' || c.status === filterStatus;
-        return matchSearch && matchStatus;
+        const matchPeriod = periodMatches(c.last_message_at, filterPeriod);
+        return matchSearch && matchStatus && matchPeriod;
     });
 
     return (
         <BackendLayout>
             <div className="h-[calc(100vh-56px)] flex flex-col">
                 <StatsBar />
+                <UpcomingEvents />
                 <div className="flex-1 overflow-hidden mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 pb-5">
                     <div className="flex h-full rounded-2xl overflow-hidden shadow-sm border border-gray-200 bg-white">
 
@@ -254,6 +374,19 @@ export default function Dashboard() {
                                     </svg>
                                     <input type="text" placeholder="Cari customer..." value={search} onChange={e => setSearch(e.target.value)}
                                         className="w-full pl-8 pr-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:bg-white transition" />
+                                </div>
+                                {/* Period filter */}
+                                <div className="flex gap-1 mb-2">
+                                    {PERIOD_OPTIONS.map(({ key, label }) => (
+                                        <button key={key} onClick={() => setFilterPeriod(key)}
+                                            className={`text-[11px] px-2 py-1 rounded-lg border transition ${
+                                                filterPeriod === key
+                                                    ? 'bg-violet-600 text-white border-violet-600'
+                                                    : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                                            }`}>
+                                            {label}
+                                        </button>
+                                    ))}
                                 </div>
                                 {/* Status filter */}
                                 <div className="flex gap-1 flex-wrap">
@@ -301,7 +434,13 @@ export default function Dashboard() {
                                             {(selectedCustomer.nama ?? '?').charAt(0).toUpperCase()}
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <p className="font-semibold text-gray-900 text-sm truncate">{selectedCustomer.nama ?? 'Tanpa Nama'}</p>
+                                            <div className="flex items-center gap-2">
+                                                <p className="font-semibold text-gray-900 text-sm truncate">{selectedCustomer.nama ?? 'Tanpa Nama'}</p>
+                                                <Link to={`/customers/${selectedCustomer.id}`}
+                                                    className="text-[10px] text-indigo-500 hover:text-indigo-700 font-medium hover:underline flex-shrink-0">
+                                                    Detail ↗
+                                                </Link>
+                                            </div>
                                             <p className="text-xs text-gray-400">+{selectedCustomer.whatsapp_id}</p>
                                         </div>
 
@@ -371,6 +510,37 @@ export default function Dashboard() {
                                         )}
                                         <div ref={bottomRef} />
                                     </div>
+
+                                    {/* Manual send — shown when AI is paused */}
+                                    {selectedCustomer.ai_paused && (
+                                        <div className="px-4 py-3 bg-white border-t border-gray-100">
+                                            <div className="flex items-end gap-2">
+                                                <textarea
+                                                    ref={inputRef}
+                                                    rows={1}
+                                                    value={sendText}
+                                                    onChange={e => setSendText(e.target.value)}
+                                                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                                                    placeholder="Ketik pesan manual... (Enter kirim, Shift+Enter baris baru)"
+                                                    className="flex-1 resize-none text-sm px-3 py-2.5 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:bg-white transition max-h-32 overflow-y-auto"
+                                                    style={{ minHeight: '42px' }}
+                                                />
+                                                <button
+                                                    onClick={handleSend}
+                                                    disabled={!sendText.trim() || sending}
+                                                    className="flex-shrink-0 w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                                                >
+                                                    {sending ? (
+                                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                                    ) : (
+                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                                                        </svg>
+                                                    )}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
                                 </>
                             ) : (
                                 <div className="flex-1 flex flex-col items-center justify-center text-gray-400">

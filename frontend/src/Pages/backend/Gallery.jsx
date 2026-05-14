@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import BackendLayout from '@/layouts/BackendLayout';
 import api from '@/api/axios';
+import { useToast } from '@/context/ToastContext';
+import ConfirmModal from '@/components/ConfirmModal';
 
 const KATEGORI_LABELS = {
     wedding:   'Wedding',
@@ -17,6 +19,8 @@ const KATEGORI_COLORS = {
 };
 
 export default function Gallery() {
+    const toast = useToast();
+    const [confirmCfg, setConfirmCfg] = useState(null);
     const [photos,      setPhotos]      = useState([]);
     const [loading,     setLoading]     = useState(true);
     const [uploading,   setUploading]   = useState(false);
@@ -92,11 +96,18 @@ export default function Gallery() {
         }
     };
 
-    const handleDelete = async (id) => {
-        if (!confirm('Hapus foto ini?')) return;
-        await api.delete(`/gallery/${id}`);
-        setPhotos(ps => ps.filter(p => p.id !== id));
-        if (lightbox?.id === id) setLightbox(null);
+    const handleDelete = (id) => {
+        setConfirmCfg({
+            title: 'Hapus Foto',
+            message: 'Foto ini akan dihapus permanen dari galeri.',
+            confirmText: 'Ya, Hapus',
+            onConfirm: async () => {
+                await api.delete(`/gallery/${id}`);
+                setPhotos(ps => ps.filter(p => p.id !== id));
+                if (lightbox?.id === id) setLightbox(null);
+                toast.success('Foto berhasil dihapus');
+            },
+        });
     };
 
     const toggleAktif = async (photo) => {
@@ -361,6 +372,7 @@ export default function Gallery() {
                     </div>
                 </div>
             )}
+            <ConfirmModal config={confirmCfg} onClose={() => setConfirmCfg(null)} />
         </BackendLayout>
     );
 }

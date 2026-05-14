@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import BackendLayout from '@/layouts/BackendLayout';
 import api from '@/api/axios';
+import { useToast } from '@/context/ToastContext';
+import ConfirmModal from '@/components/ConfirmModal';
 
 const KATEGORI_COLORS = {
     umum:     'bg-gray-100 text-gray-700',
@@ -11,6 +13,8 @@ const KATEGORI_COLORS = {
 };
 
 export default function Faqs() {
+    const toast = useToast();
+    const [confirmCfg, setConfirmCfg] = useState(null);
     const [faqs,        setFaqs]        = useState([]);
     const [loading,     setLoading]     = useState(true);
     const [showModal,   setShowModal]   = useState(false);
@@ -66,10 +70,17 @@ export default function Faqs() {
         }
     };
 
-    const handleDelete = async (id) => {
-        if (!confirm('Hapus FAQ ini?')) return;
-        await api.delete(`/faqs/${id}`);
-        setFaqs(fs => fs.filter(f => f.id !== id));
+    const handleDelete = (id) => {
+        setConfirmCfg({
+            title: 'Hapus FAQ',
+            message: 'FAQ ini akan dihapus permanen.',
+            confirmText: 'Ya, Hapus',
+            onConfirm: async () => {
+                await api.delete(`/faqs/${id}`);
+                setFaqs(fs => fs.filter(f => f.id !== id));
+                toast.success('FAQ berhasil dihapus');
+            },
+        });
     };
 
     const toggleAktif = async (faq) => {
@@ -280,6 +291,7 @@ export default function Faqs() {
                     </div>
                 </div>
             )}
+            <ConfirmModal config={confirmCfg} onClose={() => setConfirmCfg(null)} />
         </BackendLayout>
     );
 }

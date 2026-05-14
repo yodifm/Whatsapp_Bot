@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import BackendLayout from '@/layouts/BackendLayout';
 import api from '@/api/axios';
+import { useToast } from '@/context/ToastContext';
+import ConfirmModal from '@/components/ConfirmModal';
 
 const TIPE_LABELS = {
     potongan_harga: 'Potongan Harga',
@@ -10,6 +12,8 @@ const TIPE_LABELS = {
 const emptyForm = { nama: '', tipe: 'potongan_harga', nilai: '', berlaku_sampai: '', aktif: true };
 
 export default function Discounts() {
+    const toast = useToast();
+    const [confirmCfg, setConfirmCfg] = useState(null);
     const [discounts, setDiscounts] = useState([]);
     const [loading,   setLoading]   = useState(true);
     const [showModal, setShowModal] = useState(false);
@@ -49,10 +53,17 @@ export default function Discounts() {
         }
     };
 
-    const handleDelete = async (id) => {
-        if (!confirm('Hapus diskon ini?')) return;
-        await api.delete(`/discounts/${id}`);
-        setDiscounts(ds => ds.filter(d => d.id !== id));
+    const handleDelete = (id) => {
+        setConfirmCfg({
+            title: 'Hapus Diskon',
+            message: 'Diskon ini akan dihapus permanen.',
+            confirmText: 'Ya, Hapus',
+            onConfirm: async () => {
+                await api.delete(`/discounts/${id}`);
+                setDiscounts(ds => ds.filter(d => d.id !== id));
+                toast.success('Diskon berhasil dihapus');
+            },
+        });
     };
 
     const toggleAktif = async (d) => {
@@ -224,6 +235,7 @@ export default function Discounts() {
                     </div>
                 </div>
             )}
+            <ConfirmModal config={confirmCfg} onClose={() => setConfirmCfg(null)} />
         </BackendLayout>
     );
 }

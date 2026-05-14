@@ -13,10 +13,13 @@ use App\Http\Controllers\Backend\BroadcastController;
 use App\Http\Controllers\Backend\CustomerController;
 use App\Http\Controllers\Backend\DashboardController;
 use App\Http\Controllers\Backend\FaqController;
+use App\Http\Controllers\Backend\FeedbackController;
+use App\Http\Controllers\Backend\ReimbursementController;
 use App\Http\Controllers\Backend\DiscountController;
 use App\Http\Controllers\Backend\GalleryController;
 use App\Http\Controllers\Backend\InvoiceController;
 use App\Http\Controllers\Backend\NotificationController;
+use App\Http\Controllers\Backend\OpAssetsController;
 use App\Http\Controllers\Backend\PackageController;
 use App\Http\Controllers\Backend\SettingController;
 use App\Http\Controllers\Backend\TestAIController;
@@ -30,6 +33,14 @@ Route::post('/webhook/whatsapp', [WhatsAppController::class, 'handle']);
 // Public booking form
 Route::get('/booking-form/packages', [BookingFormController::class, 'packages']);
 Route::post('/booking-form',         [BookingFormController::class, 'store']);
+
+// Public feedback form
+Route::get('/studio-info',           [FeedbackController::class, 'studioInfo']);
+Route::get('/booking-info/{id}',     [FeedbackController::class, 'bookingInfo']);
+Route::post('/feedback',             [FeedbackController::class, 'store']);
+
+// Public reimbursement form (staff submits, no auth needed)
+Route::post('/reimbursement', [ReimbursementController::class, 'store']);
 
 // Public staff logistic checklist (no auth needed — internal staff tool)
 Route::get('/staff-checkin/items',            [LogisticStaffController::class, 'items']);
@@ -58,6 +69,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/settings',  [SettingController::class, 'index']);
     Route::post('/settings', [SettingController::class, 'update']);
 
+    // Operational assets (booth types, printers, transports, staff ops)
+    Route::get('/op-assets',  [OpAssetsController::class, 'index']);
+    Route::post('/op-assets', [OpAssetsController::class, 'update']);
+
     Route::post('/test-ai', [TestAIController::class, 'chat']);
 
     // Packages
@@ -67,8 +82,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/packages/{package}', [PackageController::class, 'destroy']);
 
     // Customer actions
+    Route::get('/customers/{customer}',             [CustomerController::class, 'show']);
     Route::patch('/customers/{customer}/status',    [CustomerController::class, 'updateStatus']);
     Route::patch('/customers/{customer}/toggle-ai', [CustomerController::class, 'toggleAI']);
+    Route::post('/customers/{customer}/send',       [CustomerController::class, 'send']);
 
     // Analytics
     Route::get('/analytics', [AnalyticsController::class, 'index']);
@@ -84,6 +101,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/bookings/booked-dates',          [BookingController::class, 'bookedDates']);
     Route::get('/bookings/form-submissions',              [BookingController::class, 'formSubmissions']);
     Route::patch('/bookings/{booking}/form-status',       [BookingController::class, 'updateFormStatus']);
+    Route::patch('/bookings/{booking}/ops',               [BookingController::class, 'updateOps']);
     Route::post('/bookings/{booking}/frame-design',       [BookingController::class, 'uploadFrameDesign']);
     Route::get('/bookings',                        [BookingController::class, 'index']);
     Route::post('/bookings',                       [BookingController::class, 'store']);
@@ -134,6 +152,15 @@ Route::middleware('auth:sanctum')->group(function () {
     // Sales
     Route::get('/sales',                        [SalesController::class, 'index']);
     Route::patch('/sales/{booking}/expenses',   [SalesController::class, 'updateExpenses']);
+
+    // Feedback (admin view)
+    Route::get('/feedbacks',                  [FeedbackController::class, 'index']);
+    Route::delete('/feedbacks/{feedback}',    [FeedbackController::class, 'destroy']);
+
+    // Reimbursements (admin view)
+    Route::get('/reimbursements',                        [ReimbursementController::class, 'index']);
+    Route::put('/reimbursements/{reimbursement}',        [ReimbursementController::class, 'update']);
+    Route::delete('/reimbursements/{reimbursement}',     [ReimbursementController::class, 'destroy']);
 
     // Discounts
     Route::get('/discounts',               [DiscountController::class, 'index']);

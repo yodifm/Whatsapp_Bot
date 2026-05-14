@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import BackendLayout from '@/layouts/BackendLayout';
 import api from '@/api/axios';
+import { useToast } from '@/context/ToastContext';
 
 export default function UploadFrame() {
+    const toast = useToast();
     const [bookings,  setBookings]  = useState([]);
     const [selected,  setSelected]  = useState(null);
     const [file,      setFile]      = useState(null);
@@ -49,8 +51,9 @@ export default function UploadFrame() {
             // refresh list
             const r = await api.get('/bookings/form-submissions', { params: { status: 'dp_paid' } });
             setBookings(r.data);
+            toast.success(`Desain berhasil diupload dan dikirim ke ${selected.customer.nama}!`);
         } catch {
-            alert('Gagal upload, coba lagi ya.');
+            toast.error('Gagal upload, coba lagi ya.');
         } finally {
             setUploading(false);
         }

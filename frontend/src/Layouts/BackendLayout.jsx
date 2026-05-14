@@ -3,8 +3,10 @@ import { useAuth } from '@/context/AuthContext';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useState } from 'react';
 
-// roles: which roles can see this item. Omit = admin only.
+// roles: which roles can see this item. divider: true = section label, not a link.
 const NAV_ITEMS = [
+    // ── OPERASI HARIAN ──────────────────────────────────────────
+    { divider: true, label: 'Operasi' },
     { to: '/', label: 'Dashboard', roles: ['admin'], icon: (
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
@@ -15,44 +17,35 @@ const NAV_ITEMS = [
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
         </svg>
     )},
-    { to: '/upload-frame', label: 'Upload Frame', roles: ['admin', 'staff_design'], icon: (
-        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-        </svg>
-    )},
-    { to: '/sales', label: 'Sales', roles: ['admin'], icon: (
-        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-    )},
-    { to: '/logistics', label: 'Logistik', roles: ['admin', 'staff_logistic'], icon: (
-        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-        </svg>
-    )},
-    { to: '/packages', label: 'Paket', roles: ['admin'], icon: (
-        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-        </svg>
-    )},
     { to: '/bookings', label: 'Kalender', roles: ['admin'], icon: (
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
         </svg>
     )},
-    { to: '/broadcast', label: 'Broadcast', roles: ['admin'], icon: (
+    { to: '/upload-frame', label: 'Upload Frame', roles: ['admin', 'staff_design'], icon: (
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
         </svg>
     )},
-    { to: '/analytics', label: 'Analytics', roles: ['admin'], icon: (
+
+    // ── LOGISTIK & OPERASIONAL ───────────────────────────────────
+    { divider: true, label: 'Logistik & Ops' },
+    { to: '/logistics', label: 'Logistik', roles: ['admin', 'staff_logistic'], icon: (
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
         </svg>
     )},
-    { to: '/gallery', label: 'Galeri', roles: ['admin'], icon: (
+    { to: '/op-settings', label: 'Op. Settings', roles: ['admin'], icon: (
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 5h12M6 12h12M6 19h12M3 5h.01M3 12h.01M3 19h.01" />
+        </svg>
+    )},
+
+    // ── KEUANGAN ────────────────────────────────────────────────
+    { divider: true, label: 'Keuangan' },
+    { to: '/sales', label: 'Sales', roles: ['admin'], icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
     )},
     { to: '/discounts', label: 'Diskon', roles: ['admin'], icon: (
@@ -60,14 +53,40 @@ const NAV_ITEMS = [
             <path strokeLinecap="round" strokeLinejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
         </svg>
     )},
+    { to: '/reimbursements', label: 'Reimburse', roles: ['admin'], icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+        </svg>
+    )},
+
+    // ── KONTEN & KOMUNIKASI ──────────────────────────────────────
+    { divider: true, label: 'Konten & Komun.' },
+    { to: '/broadcast', label: 'Broadcast', roles: ['admin'], icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
+        </svg>
+    )},
+    { to: '/gallery', label: 'Galeri', roles: ['admin'], icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+        </svg>
+    )},
+    { to: '/feedbacks', label: 'Feedback', roles: ['admin'], icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+        </svg>
+    )},
     { to: '/faqs', label: 'FAQ', roles: ['admin'], icon: (
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
     )},
-    { to: '/test-ai', label: 'Test AI', roles: ['admin'], icon: (
+
+    // ── KONFIGURASI SISTEM ───────────────────────────────────────
+    { divider: true, label: 'Konfigurasi' },
+    { to: '/packages', label: 'Paket', roles: ['admin'], icon: (
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
         </svg>
     )},
     { to: '/kiosks', label: 'Kiosks', roles: ['admin'], icon: (
@@ -78,6 +97,16 @@ const NAV_ITEMS = [
     { to: '/users', label: 'Users', roles: ['admin'], icon: (
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+        </svg>
+    )},
+    { to: '/analytics', label: 'Analytics', roles: ['admin'], icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+        </svg>
+    )},
+    { to: '/test-ai', label: 'Test AI', roles: ['admin'], icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
         </svg>
     )},
     { to: '/settings', label: 'Settings', roles: ['admin'], icon: (
@@ -132,14 +161,25 @@ export default function BackendLayout({ children }) {
             </div>
 
             {/* Nav */}
-            <nav className="flex-1 px-3 space-y-0.5 overflow-y-auto">
-                {NAV_ITEMS.filter(item => !item.roles || item.roles.includes(user?.role ?? 'admin')).map(item => {
+            <nav className="flex-1 px-3 overflow-y-auto pb-2">
+                {NAV_ITEMS.filter(item => item.divider || !item.roles || item.roles.includes(user?.role ?? 'admin')).map((item, idx) => {
+                    if (item.divider) {
+                        return collapsed && !mobile
+                            ? <div key={item.label} className="my-2 h-px bg-gray-100 mx-1" />
+                            : (
+                                <div key={item.label} className={`${idx === 0 ? 'pt-1' : 'pt-3'} pb-1 px-1`}>
+                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">
+                                        {item.label}
+                                    </span>
+                                </div>
+                            );
+                    }
                     const active = location.pathname === item.to;
                     return (
                         <Link key={item.to} to={item.to}
                             onClick={() => mobile && setMobileOpen(false)}
                             title={collapsed && !mobile ? item.label : undefined}
-                            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group
+                            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group mb-0.5
                                 ${active
                                     ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-200'
                                     : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
@@ -243,9 +283,14 @@ export default function BackendLayout({ children }) {
                             <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
                         </svg>
                     </button>
-                    <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center text-sm">📸</div>
-                        <span className="font-bold text-gray-900 text-sm">Poonya Bot</span>
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center text-sm flex-shrink-0">📸</div>
+                        <span className="font-bold text-gray-900 text-sm truncate">
+                            {NAV_ITEMS.find(n => !n.divider && n.to === location.pathname)?.label ?? 'Poonya Bot'}
+                        </span>
+                    </div>
+                    <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 text-xs font-bold flex-shrink-0">
+                        {initials}
                     </div>
                 </header>
 

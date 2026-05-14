@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import BackendLayout from '@/Layouts/BackendLayout';
 import api from '@/api/axios';
+import { TableSkeleton } from '@/components/Skeleton';
 
 function formatRp(n) {
     if (!n && n !== 0) return 'Rp 0';
@@ -122,6 +123,34 @@ export default function Sales() {
         return new Date(+y, +m - 1).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
     };
 
+    const exportCSV = () => {
+        const headers = ['Acara', 'Tanggal', 'Paket', 'Gross', 'Transport', 'Staff', 'Logistik', 'Net', 'Margin %', 'Status'];
+        const csvRows = [
+            headers.join(','),
+            ...rows.map(r => [
+                `"${(r.nama_acara || '-').replace(/"/g, '""')}"`,
+                r.tanggal,
+                `"${(r.package_nama || '-').replace(/"/g, '""')}"`,
+                r.gross,
+                r.biaya_transport,
+                r.biaya_staff,
+                r.biaya_logistik,
+                r.net,
+                r.margin_pct,
+                r.status,
+            ].join(',')),
+        ];
+        if (summary) {
+            csvRows.push('');
+            csvRows.push(`"TOTAL",,,"${summary.gross}","","","","${summary.net}","${summary.margin_pct}%",""`);
+        }
+        const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `sales-${month}.csv`;
+        link.click();
+    };
+
     return (
         <BackendLayout>
             <div className="p-6 max-w-6xl mx-auto space-y-6">
@@ -133,6 +162,16 @@ export default function Sales() {
                         <p className="text-sm text-gray-500 mt-0.5">Pendapatan kotor vs bersih per event</p>
                     </div>
 
+                    <div className="flex items-center gap-2">
+                    {rows.length > 0 && (
+                        <button onClick={exportCSV}
+                            className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm text-gray-600 font-medium hover:bg-gray-50 transition shadow-sm">
+                            <svg className="w-4 h-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                            Export CSV
+                        </button>
+                    )}
                     {/* Month picker */}
                     <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
                         <button onClick={() => shiftMonth(-1)}
@@ -169,7 +208,11 @@ export default function Sales() {
                 {/* Table */}
                 <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
                     {loading ? (
-                        <div className="p-8 text-center text-sm text-gray-400">Memuat data {monthLabel()}...</div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm min-w-[900px]">
+                                <TableSkeleton rows={5} cols={9} />
+                            </table>
+                        </div>
                     ) : rows.length === 0 ? (
                         <div className="p-12 text-center">
                             <div className="text-4xl mb-3">📭</div>

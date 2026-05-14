@@ -26,6 +26,13 @@ class ProcessWhatsAppMessage implements ShouldQueue
     public int $tries   = 1;  // No retry — avoid sending duplicate messages
     public int $timeout = 90;
 
+    private const HANDOFF_KEYWORDS = [
+        'minta admin', 'ke admin', 'admin dong', 'admin aja', 'mau admin',
+        'hubungi admin', 'kontak admin', 'sama adminnya', 'dengan admin',
+        'bicara orang', 'orang beneran', 'manusia aja', 'cs nya', 'cs langsung',
+        'customer service', 'tolong admin', 'admin tolong',
+    ];
+
     public function __construct(
         private readonly array $payload,
         private readonly ?int  $kioskId,
@@ -43,7 +50,10 @@ class ProcessWhatsAppMessage implements ShouldQueue
         try {
             $customer = Customer::firstOrCreate(
                 ['whatsapp_id' => $waId],
-                ['nama' => $this->payload['contacts'][0]['profile']['name'] ?? null],
+                [
+                    'nama'       => $this->payload['contacts'][0]['profile']['name'] ?? null,
+                    'ab_variant' => rand(0, 1) ? 'A' : 'B',
+                ],
             );
 
             if ($customer->status === 'new') {
@@ -67,6 +77,18 @@ class ProcessWhatsAppMessage implements ShouldQueue
 
             if ($kiosk && ! $kiosk->ai_enabled) return;
             if ($customer->ai_paused) return;
+
+            // Detect request for human agent
+            $lowerText = mb_strtolower($userText);
+            foreach (self::HANDOFF_KEYWORDS as $kw) {
+                if (str_contains($lowerText, $kw)) {
+                    $handoffMsg = 'Oke kak, aku sampaikan ke tim kami ya! Sebentar lagi ada yang hubungi kak 😊';
+                    $waService->sendText($waId, $handoffMsg);
+                    ChatHistory::create(['customer_id' => $customer->id, 'role' => 'assistant', 'content' => $handoffMsg]);
+                    $customer->update(['ai_paused' => true, 'handoff_requested' => true]);
+                    return;
+                }
+            }
 
             // Load context data
             $history = $customer->chatHistories()
@@ -94,12 +116,24 @@ class ProcessWhatsAppMessage implements ShouldQueue
                 ->map(fn($b) => $b->tanggal->format('Y-m-d') . ($b->jam_mulai ? ' jam ' . $b->jam_mulai : ''))
                 ->unique()->values()->toArray();
 
-            $result   = $ai->getReply($userText, $history, $packages, $faqs, $bookedSlots, $discounts, $kiosk);
+            $result   = $ai->getReply(
+                $userText, $history, $packages, $faqs, $bookedSlots, $discounts,
+                $kiosk, $customer->ai_context ?? [], $customer->ab_variant ?? 'A',
+            );
             $aiReply  = $result['reply'];
             $leadData = $result['leadData'];
 
             if ($leadData && ! empty($leadData['nama'])) {
                 $customer->update(['nama' => $leadData['nama'], 'status' => 'interested']);
+
+                // Persist collected data so AI remembers it in future sessions
+                $newContext = array_merge($customer->ai_context ?? [], array_filter([
+                    'nama'    => $leadData['nama']    ?? null,
+                    'tanggal' => $leadData['tanggal'] ?? null,
+                    'acara'   => $leadData['acara']   ?? null,
+                    'lokasi'  => $leadData['lokasi']  ?? null,
+                ]));
+                $customer->update(['ai_context' => $newContext]);
 
                 if (! empty($leadData['tanggal'])) {
                     Booking::updateOrCreate(
@@ -134,8 +168,9 @@ class ProcessWhatsAppMessage implements ShouldQueue
         AIService       $ai,
         InvoiceService  $invoiceService,
     ): void {
-        $mediaId = $msg['image']['id']      ?? null;
-        $caption = $msg['image']['caption'] ?? '';
+        $mediaId  = $msg['image']['id']      ?? null;
+        $mediaUrl = $msg['image']['url']     ?? null; // Fonnte sends direct URL
+        $caption  = $msg['image']['caption'] ?? '';
 
         ChatHistory::create([
             'customer_id' => $customer->id,
@@ -145,26 +180,35 @@ class ProcessWhatsAppMessage implements ShouldQueue
 
         if ($kiosk && ! $kiosk->ai_enabled) return;
         if ($customer->ai_paused) return;
-        if (! $mediaId) return;
+        if (! $mediaId && ! $mediaUrl) return;
 
         try {
-            $accessToken = $kiosk
-                ? $kiosk->wa_access_token
-                : (\App\Models\Setting::get('wa_access_token') ?: config('services.whatsapp.access_token', ''));
+            $http = new \GuzzleHttp\Client(['timeout' => 15]);
 
-            $http      = new \GuzzleHttp\Client(['timeout' => 15]);
-            $mediaResp = $http->get("https://graph.facebook.com/v19.0/{$mediaId}", [
-                'headers' => ['Authorization' => "Bearer {$accessToken}"],
-            ]);
-            $mediaData = json_decode($mediaResp->getBody()->getContents(), true);
-            $mediaUrl  = $mediaData['url'] ?? null;
+            // Fonnte: direct URL — download without auth token
+            if ($mediaUrl) {
+                $imageResp  = $http->get($mediaUrl);
+                $imageBytes = $imageResp->getBody()->getContents();
+                $mimeType   = $imageResp->getHeaderLine('Content-Type') ?: 'image/jpeg';
+                $base64     = base64_encode($imageBytes);
+            } else {
+                // Meta: resolve media ID → URL → download with auth token
+                $accessToken = $kiosk
+                    ? $kiosk->wa_access_token
+                    : (\App\Models\Setting::get('wa_access_token') ?: config('services.whatsapp.access_token', ''));
 
-            if (! $mediaUrl) return;
+                $mediaResp  = $http->get("https://graph.facebook.com/v19.0/{$mediaId}", [
+                    'headers' => ['Authorization' => "Bearer {$accessToken}"],
+                ]);
+                $mediaData  = json_decode($mediaResp->getBody()->getContents(), true);
+                $resolvedUrl = $mediaData['url'] ?? null;
+                if (! $resolvedUrl) return;
 
-            $imageResp  = $http->get($mediaUrl, ['headers' => ['Authorization' => "Bearer {$accessToken}"]]);
-            $imageBytes = $imageResp->getBody()->getContents();
-            $mimeType   = $imageResp->getHeaderLine('Content-Type') ?: 'image/jpeg';
-            $base64     = base64_encode($imageBytes);
+                $imageResp  = $http->get($resolvedUrl, ['headers' => ['Authorization' => "Bearer {$accessToken}"]]);
+                $imageBytes = $imageResp->getBody()->getContents();
+                $mimeType   = $imageResp->getHeaderLine('Content-Type') ?: 'image/jpeg';
+                $base64     = base64_encode($imageBytes);
+            }
 
             $result = $ai->verifyTransferImage($base64, $mimeType, $caption, $kiosk);
 

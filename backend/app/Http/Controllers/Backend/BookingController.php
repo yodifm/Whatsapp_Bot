@@ -39,7 +39,7 @@ class BookingController extends Controller
 
     public function formSubmissions(Request $request): JsonResponse
     {
-        $query = Booking::with(['customer', 'package'])
+        $query = Booking::with(['customer', 'package', 'kiosk'])
             ->whereNotNull('frame')
             ->orderByDesc('created_at');
 
@@ -65,16 +65,30 @@ class BookingController extends Controller
             'tanggal'           => $b->tanggal->format('Y-m-d'),
             'jam_mulai'         => $b->jam_mulai,
             'nama_acara'        => $b->nama_acara,
-            'lokasi'            => $b->catatan,
+            'lokasi'            => $b->lokasi ?? $b->catatan,
+            'catatan'           => $b->lokasi ? $b->catatan : null,
             'frame'             => $b->frame,
             'warna_backdrop'    => $b->warna_backdrop,
             'status'                    => $b->status,
+            'dp_amount'                 => $b->dp_amount,
             'syarat_venue'              => $b->syarat_venue,
             'syarat_pembayaran'         => $b->syarat_pembayaran,
             'frame_design_url'          => $b->frame_design_url,
             'frame_design_reference'    => $b->frame_design_reference,
             'frame_design_notified_at'  => $b->frame_design_notified_at?->format('Y-m-d H:i'),
             'created_at'                => $b->created_at->format('Y-m-d H:i'),
+            // Operational fields
+            'kirim_invoice'     => (bool) $b->kirim_invoice,
+            'sudah_dp'          => (bool) $b->sudah_dp,
+            'pelunasan'         => (bool) $b->pelunasan,
+            'jumlah_pelunasan'  => $b->jumlah_pelunasan,
+            'type_booth'        => $b->type_booth ?? [],
+            'kiosk'             => $b->kiosk ? ['id' => $b->kiosk->id, 'name' => $b->kiosk->name] : null,
+            'printer'           => $b->printer,
+            'transport'         => $b->transport,
+            'total_jarak'       => $b->total_jarak,
+            'staff_operasional' => $b->staff_operasional ?? [],
+            'additional_info'   => $b->additional_info,
         ]));
     }
 
@@ -128,6 +142,43 @@ class BookingController extends Controller
         return response()->json([
             'frame_design_url'         => $imageUrl,
             'frame_design_notified_at' => $booking->frame_design_notified_at?->format('Y-m-d H:i'),
+        ]);
+    }
+
+    public function updateOps(Request $request, Booking $booking): JsonResponse
+    {
+        $data = $request->validate([
+            'kirim_invoice'       => 'sometimes|boolean',
+            'sudah_dp'            => 'sometimes|boolean',
+            'pelunasan'           => 'sometimes|boolean',
+            'dp_amount'           => 'sometimes|nullable|integer|min:0',
+            'jumlah_pelunasan'    => 'sometimes|nullable|integer|min:0',
+            'type_booth'          => 'sometimes|nullable|array',
+            'type_booth.*'        => 'string|max:100',
+            'kiosk_id'            => 'sometimes|nullable|exists:kiosks,id',
+            'printer'             => 'sometimes|nullable|string|max:100',
+            'transport'           => 'sometimes|nullable|string|max:100',
+            'total_jarak'         => 'sometimes|nullable|numeric|min:0',
+            'staff_operasional'   => 'sometimes|nullable|array',
+            'staff_operasional.*' => 'string|max:100',
+            'additional_info'     => 'sometimes|nullable|string|max:2000',
+        ]);
+
+        $booking->update($data);
+
+        return response()->json([
+            'kirim_invoice'     => (bool) $booking->kirim_invoice,
+            'sudah_dp'          => (bool) $booking->sudah_dp,
+            'pelunasan'         => (bool) $booking->pelunasan,
+            'dp_amount'         => $booking->dp_amount,
+            'jumlah_pelunasan'  => $booking->jumlah_pelunasan,
+            'type_booth'        => $booking->type_booth ?? [],
+            'kiosk'             => $booking->kiosk ? ['id' => $booking->kiosk->id, 'name' => $booking->kiosk->name] : null,
+            'printer'           => $booking->printer,
+            'transport'         => $booking->transport,
+            'total_jarak'       => $booking->total_jarak,
+            'staff_operasional' => $booking->staff_operasional ?? [],
+            'additional_info'   => $booking->additional_info,
         ]);
     }
 

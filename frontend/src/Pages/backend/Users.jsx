@@ -1,11 +1,15 @@
 import { useState, useEffect } from 'react';
 import BackendLayout from '@/Layouts/BackendLayout';
 import api from '@/api/axios';
+import { useToast } from '@/context/ToastContext';
+import ConfirmModal from '@/components/ConfirmModal';
+import EmptyState from '@/components/EmptyState';
 
 const ROLES = [
-    { value: 'admin',          label: 'Admin',           color: 'bg-indigo-100 text-indigo-700' },
-    { value: 'staff_logistic', label: 'Staff Logistik',  color: 'bg-amber-100 text-amber-700'   },
-    { value: 'staff_design',   label: 'Staff Design',    color: 'bg-pink-100 text-pink-700'     },
+    { value: 'admin',             label: 'Admin',              color: 'bg-indigo-100 text-indigo-700' },
+    { value: 'staff_logistic',    label: 'Staff Logistik',     color: 'bg-amber-100 text-amber-700'   },
+    { value: 'staff_design',      label: 'Staff Design',       color: 'bg-pink-100 text-pink-700'     },
+    { value: 'staff_operasional', label: 'Staff Operasional',  color: 'bg-emerald-100 text-emerald-700' },
 ];
 
 const EMPTY = { name: '', email: '', role: 'admin', password: '' };
@@ -127,6 +131,8 @@ function Modal({ user, onClose, onSave }) {
 }
 
 export default function Users() {
+    const toast = useToast();
+    const [confirmCfg, setConfirmCfg] = useState(null);
     const [users,   setUsers]   = useState([]);
     const [loading, setLoading] = useState(true);
     const [modal,   setModal]   = useState(null);
@@ -146,17 +152,24 @@ export default function Users() {
         setModal(null);
     };
 
-    const handleDelete = async (u) => {
-        if (!confirm(`Hapus user "${u.name}"?`)) return;
-        setDeleting(u.id);
-        try {
-            await api.delete(`/users/${u.id}`);
-            setUsers(prev => prev.filter(x => x.id !== u.id));
-        } catch (err) {
-            alert(err.response?.data?.message || 'Gagal menghapus user.');
-        } finally {
-            setDeleting(null);
-        }
+    const handleDelete = (u) => {
+        setConfirmCfg({
+            title: 'Hapus User',
+            message: `Hapus user "${u.name}"? Akses mereka akan hilang segera.`,
+            confirmText: 'Ya, Hapus',
+            onConfirm: async () => {
+                setDeleting(u.id);
+                try {
+                    await api.delete(`/users/${u.id}`);
+                    setUsers(prev => prev.filter(x => x.id !== u.id));
+                    toast.success(`User "${u.name}" berhasil dihapus`);
+                } catch (err) {
+                    toast.error(err.response?.data?.message || 'Gagal menghapus user.');
+                } finally {
+                    setDeleting(null);
+                }
+            },
+        });
     };
 
     return (
@@ -199,7 +212,7 @@ export default function Users() {
                             <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
                         </div>
                     ) : users.length === 0 ? (
-                        <div className="text-center py-16 text-gray-400 text-sm">Belum ada user.</div>
+                        <EmptyState icon="👤" title="Belum ada user" description="Tambahkan user baru untuk akses admin." />
                     ) : (
                         <table className="w-full text-sm">
                             <thead>
@@ -248,6 +261,7 @@ export default function Users() {
             {modal !== null && (
                 <Modal user={modal?.id ? modal : null} onClose={() => setModal(null)} onSave={handleSave} />
             )}
+            <ConfirmModal config={confirmCfg} onClose={() => setConfirmCfg(null)} />
         </BackendLayout>
     );
 }

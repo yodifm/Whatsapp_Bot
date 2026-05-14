@@ -1,6 +1,8 @@
 import { useEffect, useState, useMemo } from 'react';
 import BackendLayout from '@/layouts/BackendLayout';
 import api from '@/api/axios';
+import { useToast } from '@/context/ToastContext';
+import ConfirmModal from '@/components/ConfirmModal';
 
 const STATUS_COLORS = {
     pending:   'bg-yellow-100 text-yellow-800',
@@ -26,6 +28,8 @@ function isSameDay(a, b) {
 
 export default function Bookings() {
     const today   = new Date();
+    const toast = useToast();
+    const [confirmCfg, setConfirmCfg] = useState(null);
     const [year,  setYear]  = useState(today.getFullYear());
     const [month, setMonth] = useState(today.getMonth()); // 0-indexed
 
@@ -135,10 +139,17 @@ export default function Bookings() {
         }
     };
 
-    const handleDelete = async (id) => {
-        if (!confirm('Hapus booking ini?')) return;
-        await api.delete(`/bookings/${id}`);
-        setBookings(bs => bs.filter(b => b.id !== id));
+    const handleDelete = (id) => {
+        setConfirmCfg({
+            title: 'Hapus Booking',
+            message: 'Booking ini akan dihapus permanen dari kalender.',
+            confirmText: 'Ya, Hapus',
+            onConfirm: async () => {
+                await api.delete(`/bookings/${id}`);
+                setBookings(bs => bs.filter(b => b.id !== id));
+                toast.success('Booking berhasil dihapus');
+            },
+        });
     };
 
     const downloadInvoice = (id) => {
@@ -149,9 +160,9 @@ export default function Bookings() {
         setSendingWa(id);
         try {
             await api.post(`/bookings/${id}/send-invoice`);
-            alert('Invoice berhasil dikirim ke WhatsApp customer!');
+            toast.success('Invoice berhasil dikirim ke WhatsApp customer!');
         } catch (err) {
-            alert(err.response?.data?.message || 'Gagal mengirim invoice.');
+            toast.error(err.response?.data?.message || 'Gagal mengirim invoice.');
         } finally {
             setSendingWa(null);
         }
@@ -285,6 +296,20 @@ export default function Bookings() {
                                                         disabled={sendingWa === b.id}
                                                         className="text-xs text-emerald-600 hover:underline disabled:opacity-50">
                                                         {sendingWa === b.id ? 'Mengirim...' : 'Kirim WA'}
+                                                    </button>
+                                                    <button onClick={() => {
+                                                        const link = `${window.location.origin}/feedback?booking=${b.id}`;
+                                                        navigator.clipboard.writeText(link);
+                                                        toast.success('Link feedback disalin! Kirim ke customer via WA');
+                                                    }} className="text-xs text-violet-600 hover:underline">
+                                                        ⭐ Feedback
+                                                    </button>
+                                                    <button onClick={() => {
+                                                        const link = `${window.location.origin}/reimbursement?booking=${b.id}`;
+                                                        navigator.clipboard.writeText(link);
+                                                        toast.success('Link reimbursement disalin! Kirim ke staff via WA');
+                                                    }} className="text-xs text-emerald-600 hover:underline">
+                                                        💸 Reimburse
                                                     </button>
                                                     <button onClick={() => handleDelete(b.id)}
                                                         className="text-xs text-red-500 hover:underline ml-auto">Hapus</button>
@@ -422,6 +447,7 @@ export default function Bookings() {
                     </div>
                 </div>
             )}
+            <ConfirmModal config={confirmCfg} onClose={() => setConfirmCfg(null)} />
         </BackendLayout>
     );
 }

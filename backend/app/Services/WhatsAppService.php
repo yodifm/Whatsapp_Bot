@@ -9,113 +9,58 @@ use GuzzleHttp\Client;
 class WhatsAppService
 {
     private Client $client;
-    private string $phoneNumberId;
-    private string $accessToken;
+    private string $token;
 
     public function __construct()
     {
-        $this->phoneNumberId = Setting::get('wa_phone_number_id')
-            ?: config('services.whatsapp.phone_number_id', '');
-
-        $this->accessToken = Setting::get('wa_access_token')
-            ?: config('services.whatsapp.access_token', '');
-
-        $this->client = new Client([
-            'base_uri' => 'https://graph.facebook.com',
-            'timeout'  => 15,
-        ]);
+        $this->token  = Setting::get('fonnte_token') ?: config('services.fonnte.token', '');
+        $this->client = new Client(['base_uri' => 'https://api.fonnte.com', 'timeout' => 15]);
     }
 
     public static function forKiosk(Kiosk $kiosk): self
     {
-        $instance = new self();
-        $instance->phoneNumberId = $kiosk->wa_phone_number_id;
-        $instance->accessToken   = $kiosk->wa_access_token;
+        $instance        = new self();
+        $instance->token = $kiosk->wa_access_token ?: $instance->token;
         return $instance;
     }
 
     public function sendText(string $to, string $message): void
     {
-        $this->client->post("/v19.0/{$this->phoneNumberId}/messages", [
-            'headers' => [
-                'Authorization' => "Bearer {$this->accessToken}",
-                'Content-Type'  => 'application/json',
-            ],
-            'json' => [
-                'messaging_product' => 'whatsapp',
-                'to'                => $to,
-                'type'              => 'text',
-                'text'              => ['body' => $message],
-            ],
-        ]);
+        $this->send(['target' => $to, 'message' => $message, 'delay' => $this->typingDelay($message)]);
     }
 
     public function sendImage(string $to, string $imageUrl, string $caption = ''): void
     {
-        $this->client->post("/v19.0/{$this->phoneNumberId}/messages", [
-            'headers' => [
-                'Authorization' => "Bearer {$this->accessToken}",
-                'Content-Type'  => 'application/json',
-            ],
-            'json' => [
-                'messaging_product' => 'whatsapp',
-                'to'                => $to,
-                'type'              => 'image',
-                'image'             => [
-                    'link'    => $imageUrl,
-                    'caption' => $caption,
-                ],
-            ],
-        ]);
+        $this->send(['target' => $to, 'message' => $caption ?: ' ', 'url' => $imageUrl, 'delay' => 2]);
     }
 
-    /**
-     * Upload a local file to WhatsApp media API, then send as a document message.
-     */
     public function sendDocument(string $to, string $filePath, string $filename, string $caption = ''): void
     {
-        // Step 1: Upload file to WhatsApp media
-        $mediaId = $this->uploadMedia($filePath, 'application/pdf');
+        // Fonnte accepts public URL — derive it from the file path under public/
+        $relativePath = str_replace(public_path(), '', $filePath);
+        $fileUrl      = url(ltrim(str_replace('\\', '/', $relativePath), '/'));
 
-        // Step 2: Send document by media_id
-        $this->client->post("/v19.0/{$this->phoneNumberId}/messages", [
-            'headers' => [
-                'Authorization' => "Bearer {$this->accessToken}",
-                'Content-Type'  => 'application/json',
-            ],
-            'json' => [
-                'messaging_product' => 'whatsapp',
-                'to'                => $to,
-                'type'              => 'document',
-                'document'          => [
-                    'id'       => $mediaId,
-                    'filename' => $filename,
-                    'caption'  => $caption,
-                ],
-            ],
+        $this->send([
+            'target'   => $to,
+            'message'  => $caption ?: ' ',
+            'url'      => $fileUrl,
+            'filename' => $filename,
+            'delay'    => 2,
         ]);
     }
 
-    private function uploadMedia(string $filePath, string $mimeType): string
+    private function send(array $data): void
     {
-        $response = $this->client->post("/v19.0/{$this->phoneNumberId}/media", [
-            'headers' => [
-                'Authorization' => "Bearer {$this->accessToken}",
-            ],
-            'multipart' => [
-                [
-                    'name'     => 'file',
-                    'contents' => fopen($filePath, 'r'),
-                    'filename' => basename($filePath),
-                    'headers'  => ['Content-Type' => $mimeType],
-                ],
-                ['name' => 'messaging_product', 'contents' => 'whatsapp'],
-                ['name' => 'type',               'contents' => $mimeType],
-            ],
+        $this->client->post('/send', [
+            'headers'     => ['Authorization' => $this->token],
+            'form_params' => $data,
         ]);
+    }
 
-        $data = json_decode($response->getBody()->getContents(), true);
-
-        return $data['id'];
+    // Simulate realistic typing speed: ~1 sec per 3 words, min 2s, max 7s
+    private function typingDelay(string $message): int
+    {
+        $words = str_word_count(strip_tags($message));
+        return max(2, min((int) ceil($words / 3), 7));
     }
 }

@@ -48,13 +48,15 @@ class AIService
         string $userMessage,
         array  $history,
         array  $packageData,
-        array  $faqData      = [],
-        array  $bookedSlots  = [],
-        array  $discountData = [],
-        ?Kiosk $kiosk        = null,
+        array  $faqData         = [],
+        array  $bookedSlots     = [],
+        array  $discountData    = [],
+        ?Kiosk $kiosk           = null,
+        array  $customerContext = [],
+        string $abVariant       = 'A',
     ): array {
         $model        = $this->selectModel($userMessage, $history);
-        $systemPrompt = $this->buildSystemPrompt($packageData, $faqData, $bookedSlots, $discountData, $kiosk);
+        $systemPrompt = $this->buildSystemPrompt($packageData, $faqData, $bookedSlots, $discountData, $kiosk, $customerContext, $abVariant);
         $messages     = $this->buildMessages($history, $userMessage);
 
         $body = $this->callApi([
@@ -167,15 +169,23 @@ PROMPT;
      */
     private function selectModel(string $message, array $history): string
     {
+        // Always use Sonnet when conversation is ongoing — Haiku loses context
+        if (count($history) >= 4) {
+            return self::MODEL_SONNET;
+        }
+
         $lower = strtolower($message);
         foreach (self::BOOKING_KEYWORDS as $kw) {
             if (str_contains($lower, $kw)) {
                 return self::MODEL_SONNET;
             }
         }
-        if (strlen($message) < 80 && count($history) < 8) {
+
+        // Only use Haiku for very first messages with no booking intent
+        if (strlen($message) < 80 && count($history) < 4) {
             return self::MODEL_HAIKU;
         }
+
         return self::MODEL_SONNET;
     }
 
@@ -233,7 +243,7 @@ PROMPT;
     {
         return [
             'name'         => 'collect_lead_data',
-            'description'  => 'Panggil tool ini HANYA ketika kamu sudah memiliki SEMUA 4 data: nama, tanggal acara, jenis acara, dan lokasi dari percakapan. Jangan panggil sebelum semua field tersedia.',
+            'description'  => 'Panggil tool ini SEGERA ketika nama, tanggal acara, jenis acara, DAN lokasi sudah diketahui dari percakapan — baik dari pesan terkini maupun pesan sebelumnya di history. Jangan tunda. Setelah dipanggil, sistem otomatis kirim pricelist ke customer.',
             'input_schema' => [
                 'type'       => 'object',
                 'properties' => [
@@ -249,10 +259,12 @@ PROMPT;
 
     private function buildSystemPrompt(
         array  $packageData,
-        array  $faqData      = [],
-        array  $bookedSlots  = [],
-        array  $discountData = [],
-        ?Kiosk $kiosk        = null,
+        array  $faqData         = [],
+        array  $bookedSlots     = [],
+        array  $discountData    = [],
+        ?Kiosk $kiosk           = null,
+        array  $customerContext = [],
+        string $abVariant       = 'A',
     ): string {
         $aiName            = ($kiosk?->ai_name)             ?: Setting::get('ai_name', 'Nadia');
         $studioName        = ($kiosk?->studio_name)         ?: Setting::get('studio_name', 'Waktunya Photobooth');
@@ -320,6 +332,29 @@ BANK;
             default    => 'hangat, antusias, percaya diri, dan punya naluri sales yang tajam.',
         };
 
+        // ── Customer context (memory across sessions) ──────────────────────────
+        $contextSection = '';
+        if (! empty($customerContext)) {
+            $lines = [];
+            if (! empty($customerContext['nama']))    $lines[] = "- Nama     : {$customerContext['nama']}";
+            if (! empty($customerContext['tanggal'])) $lines[] = "- Tanggal  : {$customerContext['tanggal']}";
+            if (! empty($customerContext['acara']))   $lines[] = "- Acara    : {$customerContext['acara']}";
+            if (! empty($customerContext['lokasi']))  $lines[] = "- Lokasi   : {$customerContext['lokasi']}";
+            if (! empty($customerContext['paket']))   $lines[] = "- Paket    : {$customerContext['paket']}";
+            if (! empty($lines)) {
+                $contextSection = "\n━━━ DATA CUSTOMER SUDAH DIKENAL ━━━\n"
+                    . "Data ini sudah diperoleh dari percakapan sebelumnya:\n"
+                    . implode("\n", $lines) . "\n"
+                    . "JANGAN tanya lagi info yang sudah ada di atas. Lanjutkan dari sini.\n"
+                    . "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
+            }
+        }
+
+        // ── A/B variant: opening style ─────────────────────────────────────────
+        $dataRequestScript = $abVariant === 'B'
+            ? "Di {$studioName}, photobooth kami sudah dipakai di 100+ event — mulai wedding, wisuda, sampai birthday 🎉\nBiar aku bisa kasih info yang pas, boleh share dulu ya kak:\n\nNama:\nTanggal acara:\nAcara: (wedding/birthday/wisuda/lainnya)\nLokasi acara:"
+            : "Halo kak! Sebelum aku share info lengkapnya, boleh isi data singkat ini dulu ya 😊\n\nNama:\nTanggal acara:\nAcara: (wedding/birthday/wisuda/lainnya)\nLokasi acara:";
+
         return <<<PROMPT
 Kamu adalah {$aiName}, admin dari {$studioName}.
 Kamu chat lewat WhatsApp — balas seperti orang beneran, bukan robot.
@@ -328,51 +363,82 @@ Kamu chat lewat WhatsApp — balas seperti orang beneran, bukan robot.
 Gunakan info ini untuk menjawab "sabtu depan", "minggu ini", dll dengan tepat.
 
 KEPRIBADIAN: {$toneDesc}
+{$contextSection}
+━━━ MEMAHAMI PESAN CUSTOMER ━━━
+- "pl", "PL", "pricelist", "price list", "harga", "rate" → semua artinya minta pricelist
+- Pahami slang: "btw"=by the way, "asap"=sesegera mungkin, "fyi"=sekadar info, "otw"=on the way, "gaskeun/gas"=ayo lanjut, "mantap/mantul"=bagus, "w/gw"=saya, "lo/lu"=kamu, "bgt"=banget, "noted"=oke dipahami, "deal"=setuju, "fix"=pasti/jadi, "kepo"=penasaran, "mager"=malas gerak, "cuss"=ayo
+- Balas casual singkat ("oke", "sip", "noted", "sama-sama", "makasih") → akui dan lanjut ke konteks percakapan, JANGAN reset ke awal
 
-━━━ ALUR WAJIB ━━━
+━━━ BACA EMOSI & NIAT CUSTOMER ━━━
+Sebelum balas, baca nada pesannya:
+- Frustasi ("susah", "ribet", "kenapa", "kok", "lama banget") → empati dulu: "Aduh maaf kak 😔 ..." baru kasih solusi
+- Browsing santai ("cuma nanya", "iseng", "penasaran aja") → ringan dan fun, jangan push terlalu keras
+- Serius beli ("fix", "deal", "mau booking", "jadi ya", "bayar") → langsung action: booking form, DP, konfirmasi
+- Bandingkan harga ("lebih murah di tempat lain") → highlight value/keunggulan, jangan defensif atau turunkan harga
+- Pakai bahasa formal/sopan → balas lebih rapi; pakai bahasa santai/gaul → balas casual juga
 
-LANGKAH 1 — KUMPULKAN DATA DULU (sebelum kasih info apapun)
-Apapun yang ditanya customer, SELALU minta data ini dulu:
+━━━ CEK HISTORY DULU — INI WAJIB ━━━
+Sebelum membalas APAPUN, baca seluruh history percakapan dan tentukan posisi saat ini:
 
-"Halo kak! Untuk info pricelist mohon mengisi data berikut ya 😊
+✅ SUDAH ADA "[Pricelist dikirim]" di history
+→ Data sudah lengkap, pricelist sudah terkirim. Lanjut tanya info venue. JANGAN minta data lagi.
 
-Nama:
-Tanggal acara:
-Acara: wedding/birthday/lainnya
-Lokasi acara:"
+✅ NAMA + TANGGAL + ACARA + LOKASI sudah ada di history atau di DATA CUSTOMER SUDAH DIKENAL di atas
+→ SEGERA panggil tool collect_lead_data dengan data tersebut. JANGAN tanya lagi.
 
-Jangan kasih info harga atau paket sebelum semua 4 field terisi.
+⚠️ Sebagian data sudah ada (misal nama + tanggal tapi belum lokasi)
+→ Tanya HANYA yang kurang. JANGAN minta ulang yang sudah diisi.
 
-LANGKAH 2 — DETEKSI FORM LENGKAP
-Form lengkap = nama + tanggal + jenis acara + lokasi sudah diketahui dari percakapan.
-Ketika LENGKAP → panggil tool `collect_lead_data`. Pricelist otomatis dikirim ke customer.
+❌ Belum ada data sama sekali
+→ Minta data lengkap (lihat format di Langkah 1).
 
-LANGKAH 3 — SETELAH DATA LENGKAP
-Ucapkan terima kasih singkat, pricelist sudah dikirim, lalu tanya venue natural.
+━━━ ALUR ━━━
 
-LANGKAH 4 — TANYA INFO VENUE (satu per satu)
+LANGKAH 1 — KUMPULKAN DATA (jika belum ada di history maupun konteks di atas)
+"{$dataRequestScript}"
+
+LANGKAH 2 — PANGGIL TOOL SAAT DATA LENGKAP
+Begitu nama + tanggal + acara + lokasi diketahui dari percakapan → LANGSUNG panggil `collect_lead_data`.
+Jangan tunda, jangan minta konfirmasi ulang.
+
+LANGKAH 3 — SETELAH PRICELIST DIKIRIM
+Ucapkan terima kasih singkat, lalu tanya info venue (satu per satu):
 1. Sudah ada venue?
-2. Ukuran ruangan (minimal 2x2m)
+2. Ukuran ruangan (minimal 2x2m)?
 3. Indoor atau semi-outdoor?
 4. Ada stop kontak dekat area photobooth? (butuh 300-450 watt)
-5. Bisa sediakan 2 kursi?
+5. Bisa sediakan 1 meja + 1 kursi?
 
-LANGKAH 5 — CLOSING
-Setelah venue oke → arahkan booking dengan link:
-"Silakan mengisi form penyewaan photobooth di link berikut 😊
+JANGAN sebut atau kirim pricelist lagi setelah "[Pricelist dikirim]" ada di history.
+
+LANGKAH 4 — CLOSING & DP
+Setelah venue oke → arahkan booking:
+"Silakan mengisi form penyewaan di link berikut 😊
 http://localhost:5173/booking"
 
-━━━ CARA NULIS ━━━
+DP: dorong secepatnya untuk amankan slot.
+"Biar slot tanggal [X] aman kak, bisa DP dulu ya — sering ada yang rebutan tanggal sama 😊"
+JANGAN bilang "batas H-2 minggu" — pakai persuasi positif saja.
+
+━━━ KETERSEDIAAN TANGGAL ━━━
+Jika customer menyebut tanggal yang ADA di SLOT SUDAH TERPESAN di bawah:
+1. Sampaikan sopan: "Tanggal [X] lagi ada acara kak 😊"
+2. Langsung tawarkan alternatif: "Gimana kalau [H-1 atau H+1]? Masih kosong tuh kak!"
+3. Proaktif — jangan tunggu customer tanya, langsung suggest tanggal terdekat yang kosong.
+
+━━━ FORMAT PENULISAN ━━━
 - Bahasa casual: "oke", "sip", "gimana", "bgt"
-- 1-3 kalimat per pesan
-- Emoji 1 per pesan, tidak harus ada
+- 1-3 kalimat per pesan, singkat dan padat
+- Emoji 1 per pesan (tidak wajib)
 - Jangan bullet point kecuali compare paket
+- Bold di WhatsApp: gunakan *teks* (SATU bintang kiri-kanan). JANGAN pakai **teks** (dua bintang) karena tidak terbaca bold di WA
+- Variasikan pembuka: "Hai kak!", "Sip kak!", "Noted kak!", "Boleh kak!", "Oke kak!" — jangan selalu "Halo kak!" di setiap pesan
 {$slotSection}
 {$discountSection}━━━ DATA PAKET ━━━
 {$paketList}
 {$faqSection}
 ━━━ KETENTUAN PEMBAYARAN ━━━
-- DP 50% maksimal H-2 minggu sebelum acara
+- DP 50% — dorong secepatnya untuk amankan slot
 - Pelunasan maksimal H-1 acara
 - Design frame: maks 3x revisi
 {$bankSection}
@@ -381,7 +447,7 @@ http://localhost:5173/booking"
 - Hanya bahas topik photobooth & studio
 - Jangan karang harga atau paket yang tidak ada di data
 - Jangan kasih diskon sendiri
-- Kalau tidak tahu: "bisa tanya langsung ke admin ya"
+- Kalau tidak tahu: "bisa tanya langsung ke admin ya kak 😊"
 PROMPT;
     }
 }

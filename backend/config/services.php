@@ -39,6 +39,10 @@ return [
         'key' => env('ANTHROPIC_API_KEY'),
     ],
 
+    'fonnte' => [
+        'token' => env('FONNTE_TOKEN', ''),
+    ],
+
     'whatsapp' => [
         'phone_number_id' => env('WA_PHONE_NUMBER_ID'),
         'access_token'    => env('WA_ACCESS_TOKEN'),

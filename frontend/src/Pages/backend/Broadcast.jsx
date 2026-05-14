@@ -1,6 +1,8 @@
 import BackendLayout from '@/layouts/BackendLayout';
 import { useState, useEffect } from 'react';
 import api from '@/api/axios';
+import { useToast } from '@/context/ToastContext';
+import ConfirmModal from '@/components/ConfirmModal';
 
 const STATUS_CONFIG = {
     new:        { label: 'Baru',      color: 'bg-gray-100 text-gray-600' },
@@ -26,6 +28,8 @@ const TEMPLATES = [
 ];
 
 export default function Broadcast() {
+    const toast = useToast();
+    const [confirmCfg, setConfirmCfg] = useState(null);
     const [message, setMessage]         = useState('');
     const [filterStatus, setFilterStatus] = useState([]);
     const [preview, setPreview]         = useState(null);
@@ -53,21 +57,29 @@ export default function Broadcast() {
         );
     };
 
-    const handleSend = async () => {
+    const handleSend = () => {
         if (!message.trim()) return;
-        if (!window.confirm(`Kirim pesan ke ${preview?.count ?? 0} customer?`)) return;
-
-        setSending(true);
-        setResult(null);
-        try {
-            const r = await api.post('/broadcast', { message, filter_status: filterStatus });
-            setResult(r.data);
-            setMessage('');
-        } catch (err) {
-            setResult({ message: 'Gagal mengirim broadcast.', sent: 0, failed: 0 });
-        } finally {
-            setSending(false);
-        }
+        setConfirmCfg({
+            title: 'Kirim Broadcast',
+            message: `Pesan akan dikirim ke ${preview?.count ?? 0} customer. Lanjutkan?`,
+            confirmText: 'Ya, Kirim',
+            variant: 'primary',
+            onConfirm: async () => {
+                setSending(true);
+                setResult(null);
+                try {
+                    const r = await api.post('/broadcast', { message, filter_status: filterStatus });
+                    setResult(r.data);
+                    setMessage('');
+                    toast.success(`Broadcast berhasil — ${r.data.sent ?? 0} terkirim`);
+                } catch (err) {
+                    setResult({ message: 'Gagal mengirim broadcast.', sent: 0, failed: 0 });
+                    toast.error('Gagal mengirim broadcast.');
+                } finally {
+                    setSending(false);
+                }
+            },
+        });
     };
 
     const charCount = message.length;
@@ -230,6 +242,7 @@ export default function Broadcast() {
                     </div>
                 </div>
             </div>
+            <ConfirmModal config={confirmCfg} onClose={() => setConfirmCfg(null)} />
         </BackendLayout>
     );
 }

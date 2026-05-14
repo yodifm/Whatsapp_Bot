@@ -1,6 +1,8 @@
 import BackendLayout from '@/layouts/BackendLayout';
 import { useState, useEffect, useMemo } from 'react';
 import api from '@/api/axios';
+import { useToast } from '@/context/ToastContext';
+import ConfirmModal from '@/components/ConfirmModal';
 
 const EMPTY = { kiosk_id: '', nama: '', harga: '', durasi_jam: '', fitur: '', aktif: true };
 
@@ -175,6 +177,8 @@ function PackageCard({ pkg, onEdit, onDelete, onToggle, deleting }) {
 }
 
 export default function Packages() {
+    const toast = useToast();
+    const [confirmCfg, setConfirmCfg] = useState(null);
     const [packages, setPackages] = useState([]);
     const [kiosks,   setKiosks]   = useState([]);
     const [modal,    setModal]     = useState(null);
@@ -193,12 +197,19 @@ export default function Packages() {
         setModal(null);
     };
 
-    const handleDelete = async (id) => {
-        if (!confirm('Hapus paket ini?')) return;
-        setDeleting(id);
-        await api.delete(`/packages/${id}`);
-        setPackages(prev => prev.filter(p => p.id !== id));
-        setDeleting(null);
+    const handleDelete = (id) => {
+        setConfirmCfg({
+            title: 'Hapus Paket',
+            message: 'Paket ini akan dihapus permanen. Booking yang ada tidak terpengaruh.',
+            confirmText: 'Ya, Hapus',
+            onConfirm: async () => {
+                setDeleting(id);
+                await api.delete(`/packages/${id}`);
+                setPackages(prev => prev.filter(p => p.id !== id));
+                setDeleting(null);
+                toast.success('Paket berhasil dihapus');
+            },
+        });
     };
 
     const toggleAktif = async (pkg) => {
@@ -299,6 +310,7 @@ export default function Packages() {
                     onSave={handleSave}
                 />
             )}
+            <ConfirmModal config={confirmCfg} onClose={() => setConfirmCfg(null)} />
         </BackendLayout>
     );
 }

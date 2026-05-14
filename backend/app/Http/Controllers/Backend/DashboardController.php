@@ -13,18 +13,19 @@ class DashboardController extends Controller
     public function customers(): JsonResponse
     {
         $customers = Customer::withCount('chatHistories')
-            ->with(['chatHistories' => fn($q) => $q->latest()->limit(1)])
+            ->with('latestChat')
             ->latest()
             ->get()
             ->map(fn($c) => [
-                'id'             => $c->id,
-                'nama'           => $c->nama ?? 'Tanpa Nama',
-                'whatsapp_id'    => $c->whatsapp_id,
-                'status'         => $c->status ?? 'new',
-                'ai_paused'      => (bool) $c->ai_paused,
-                'total_pesan'    => $c->chat_histories_count,
-                'pesan_terakhir' => $c->chatHistories->first()?->content,
-                'waktu_terakhir' => $c->chatHistories->first()?->created_at?->diffForHumans(),
+                'id'              => $c->id,
+                'nama'            => $c->nama ?? 'Tanpa Nama',
+                'whatsapp_id'     => $c->whatsapp_id,
+                'status'          => $c->status ?? 'new',
+                'ai_paused'       => (bool) $c->ai_paused,
+                'total_pesan'     => $c->chat_histories_count,
+                'pesan_terakhir'  => $c->latestChat?->content,
+                'waktu_terakhir'  => $c->latestChat?->created_at?->setTimezone('Asia/Jakarta')->diffForHumans(),
+                'last_message_at' => $c->latestChat?->created_at?->setTimezone('Asia/Jakarta')->toIso8601String(),
             ]);
 
         return response()->json($customers);
@@ -104,7 +105,7 @@ class DashboardController extends Controller
             'id'         => $m->id,
             'role'       => $m->role,
             'content'    => $m->content,
-            'created_at' => $m->created_at->format('d M Y, H:i'),
+            'created_at' => $m->created_at->setTimezone('Asia/Jakarta')->format('d M Y, H:i'),
         ])->values();
 
         return response()->json($messages);

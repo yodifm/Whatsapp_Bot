@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import axios from 'axios';
 
 const BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
@@ -255,12 +256,12 @@ export default function BookingForm() {
                                     </Field>
                                     <div className="grid grid-cols-2 gap-3">
                                         <Field label="Tanggal Acara" required error={errors.tanggal?.[0]}>
-                                            <FloatInput type="date" value={form.tanggal}
-                                                onChange={e => set('tanggal', e.target.value)} error={errors.tanggal} />
+                                            <DatePickerField value={form.tanggal}
+                                                onChange={v => set('tanggal', v)} error={errors.tanggal} />
                                         </Field>
                                         <Field label="Jam Mulai" required error={errors.jam_mulai?.[0]}>
-                                            <FloatInput type="time" value={form.jam_mulai}
-                                                onChange={e => set('jam_mulai', e.target.value)} error={errors.jam_mulai} />
+                                            <TimePickerField value={form.jam_mulai}
+                                                onChange={v => set('jam_mulai', v)} error={errors.jam_mulai} />
                                         </Field>
                                     </div>
                                     <Field label="Lokasi Acara" required error={errors.lokasi?.[0]}>
@@ -552,5 +553,280 @@ function FloatInput({ error, ...props }) {
                 error ? 'border-red-300 focus:border-red-400' : 'border-gray-100 focus:border-violet-400'
             }`}
         />
+    );
+}
+
+// ─── Custom Date Picker ────────────────────────────────────────────────────────
+const MONTHS_ID = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+const DAYS_ID   = ['Min','Sen','Sel','Rab','Kam','Jum','Sab'];
+
+function DatePickerField({ value, onChange, error }) {
+    const [open, setOpen]         = useState(false);
+    const [viewYear,  setViewYear]  = useState(() => value ? parseInt(value.substring(0,4)) : new Date().getFullYear());
+    const [viewMonth, setViewMonth] = useState(() => value ? parseInt(value.substring(5,7)) - 1 : new Date().getMonth());
+    const [pos, setPos]           = useState({ top: 0, left: 0, width: 280 });
+    const triggerRef = useRef();
+    const popupRef   = useRef();
+
+    const today    = new Date(); today.setHours(0,0,0,0);
+    const selected = value ? (() => { const d = new Date(value + 'T00:00:00'); d.setHours(0,0,0,0); return d; })() : null;
+
+    const openPicker = () => {
+        if (triggerRef.current) {
+            const r = triggerRef.current.getBoundingClientRect();
+            setPos({ top: r.bottom + window.scrollY + 8, left: r.left + window.scrollX, width: Math.max(r.width, 288) });
+        }
+        if (value) { setViewYear(parseInt(value.substring(0,4))); setViewMonth(parseInt(value.substring(5,7)) - 1); }
+        setOpen(o => !o);
+    };
+
+    useEffect(() => {
+        if (!open) return;
+        const onDown   = e => { if (!popupRef.current?.contains(e.target) && !triggerRef.current?.contains(e.target)) setOpen(false); };
+        const onScroll = () => setOpen(false);
+        document.addEventListener('mousedown', onDown);
+        window.addEventListener('scroll', onScroll, true);
+        return () => { document.removeEventListener('mousedown', onDown); window.removeEventListener('scroll', onScroll, true); };
+    }, [open]);
+
+    const prevMonth = () => viewMonth === 0 ? (setViewMonth(11), setViewYear(y => y-1)) : setViewMonth(m => m-1);
+    const nextMonth = () => viewMonth === 11 ? (setViewMonth(0),  setViewYear(y => y+1)) : setViewMonth(m => m+1);
+
+    const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+    const firstDay    = new Date(viewYear, viewMonth, 1).getDay();
+
+    const selectDay = (day) => {
+        const d = new Date(viewYear, viewMonth, day); d.setHours(0,0,0,0);
+        if (d < today) return;
+        onChange(`${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`);
+        setOpen(false);
+    };
+
+    const displayValue = selected
+        ? selected.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+        : null;
+
+    return (
+        <>
+            <button ref={triggerRef} type="button" onClick={openPicker}
+                className={`w-full flex items-center justify-between border-2 rounded-2xl px-4 py-3 text-sm transition-all
+                    ${error ? 'border-red-300 bg-red-50/30'
+                            : open ? 'border-violet-400 bg-white shadow-sm shadow-violet-100'
+                                   : 'border-gray-100 bg-gray-50 hover:border-violet-200'}`}>
+                <span className={displayValue ? 'text-gray-900 font-medium' : 'text-gray-400'}>
+                    {displayValue || 'Pilih tanggal'}
+                </span>
+                <svg className={`w-4 h-4 flex-shrink-0 transition-colors ${open ? 'text-violet-500' : 'text-gray-300'}`}
+                    fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                </svg>
+            </button>
+
+            {open && createPortal(
+                <div ref={popupRef}
+                    style={{ position: 'absolute', top: pos.top, left: pos.left, width: pos.width, zIndex: 9999 }}
+                    className="bg-white rounded-3xl shadow-2xl border border-gray-100/80 p-4">
+
+                    {/* Month navigation */}
+                    <div className="flex items-center justify-between mb-4">
+                        <button type="button" onClick={prevMonth}
+                            className="w-8 h-8 rounded-xl hover:bg-gray-100 flex items-center justify-center text-gray-500 transition">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/>
+                            </svg>
+                        </button>
+                        <span className="text-sm font-bold text-gray-800">{MONTHS_ID[viewMonth]} {viewYear}</span>
+                        <button type="button" onClick={nextMonth}
+                            className="w-8 h-8 rounded-xl hover:bg-gray-100 flex items-center justify-center text-gray-500 transition">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/>
+                            </svg>
+                        </button>
+                    </div>
+
+                    {/* Day headers */}
+                    <div className="grid grid-cols-7 mb-1">
+                        {DAYS_ID.map(d => (
+                            <div key={d} className="text-center text-[11px] font-bold text-gray-400 py-1">{d}</div>
+                        ))}
+                    </div>
+
+                    {/* Day cells */}
+                    <div className="grid grid-cols-7 gap-0.5">
+                        {Array.from({ length: firstDay }, (_, i) => <div key={`e${i}`} />)}
+                        {Array.from({ length: daysInMonth }, (_, i) => {
+                            const day  = i + 1;
+                            const date = new Date(viewYear, viewMonth, day); date.setHours(0,0,0,0);
+                            const isPast  = date < today;
+                            const isToday = date.getTime() === today.getTime();
+                            const isSel   = selected && date.getTime() === selected.getTime();
+                            return (
+                                <button key={day} type="button" disabled={isPast}
+                                    onClick={() => selectDay(day)}
+                                    className={`h-9 rounded-xl text-sm font-medium transition-all
+                                        ${isSel   ? 'text-white shadow-lg shadow-violet-200'
+                                                  : isToday  ? 'ring-2 ring-violet-400 text-violet-700 font-bold'
+                                                  : isPast   ? 'text-gray-200 cursor-not-allowed'
+                                                             : 'text-gray-700 hover:bg-violet-50 hover:text-violet-700'}`}
+                                    style={isSel ? { background: 'linear-gradient(135deg,#7c3aed,#4f46e5)' } : {}}>
+                                    {day}
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    {/* Footer */}
+                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
+                        <button type="button" onClick={() => { onChange(''); setOpen(false); }}
+                            className="text-xs text-gray-400 hover:text-gray-600 transition font-medium px-2 py-1 rounded-lg hover:bg-gray-100">
+                            Hapus
+                        </button>
+                        <button type="button" onClick={() => {
+                            const d = new Date();
+                            if (d >= today) {
+                                onChange(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
+                                setOpen(false);
+                            }
+                        }} className="text-xs text-violet-600 font-bold hover:text-violet-800 transition px-2 py-1 rounded-lg hover:bg-violet-50">
+                            Hari ini
+                        </button>
+                    </div>
+                </div>,
+                document.body
+            )}
+        </>
+    );
+}
+
+// ─── Custom Time Picker ────────────────────────────────────────────────────────
+const JAM_OPTS   = Array.from({ length: 15 }, (_, i) => i + 8); // 08–22
+const MENIT_OPTS = [0, 15, 30, 45];
+
+function TimePickerField({ value, onChange, error }) {
+    const [open, setOpen] = useState(false);
+    const [selH, setSelH] = useState(() => value ? parseInt(value.split(':')[0]) : null);
+    const [selM, setSelM] = useState(() => value ? parseInt(value.split(':')[1]) : null);
+    const [pos,  setPos]  = useState({ top: 0, left: 0 });
+    const triggerRef  = useRef();
+    const popupRef    = useRef();
+    const hourListRef = useRef();
+
+    useEffect(() => {
+        if (value) {
+            setSelH(parseInt(value.split(':')[0]));
+            setSelM(parseInt(value.split(':')[1]));
+        }
+    }, [value]);
+
+    const openPicker = () => {
+        if (triggerRef.current) {
+            const r = triggerRef.current.getBoundingClientRect();
+            setPos({ top: r.bottom + window.scrollY + 8, left: r.left + window.scrollX });
+        }
+        setOpen(o => !o);
+        setTimeout(() => {
+            if (hourListRef.current && selH !== null) {
+                hourListRef.current.scrollTop = JAM_OPTS.indexOf(selH) * 44;
+            }
+        }, 60);
+    };
+
+    useEffect(() => {
+        if (!open) return;
+        const onDown   = e => { if (!popupRef.current?.contains(e.target) && !triggerRef.current?.contains(e.target)) setOpen(false); };
+        const onScroll = e => { if (!popupRef.current?.contains(e.target)) setOpen(false); };
+        document.addEventListener('mousedown', onDown);
+        window.addEventListener('scroll', onScroll, true);
+        return () => { document.removeEventListener('mousedown', onDown); window.removeEventListener('scroll', onScroll, true); };
+    }, [open]);
+
+    const confirm = (h, m) => {
+        onChange(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+        setOpen(false);
+    };
+
+    const displayValue = value || null;
+
+    return (
+        <>
+            <button ref={triggerRef} type="button" onClick={openPicker}
+                className={`w-full flex items-center justify-between border-2 rounded-2xl px-4 py-3 text-sm transition-all
+                    ${error ? 'border-red-300 bg-red-50/30'
+                            : open ? 'border-violet-400 bg-white shadow-sm shadow-violet-100'
+                                   : 'border-gray-100 bg-gray-50 hover:border-violet-200'}`}>
+                <span className={displayValue ? 'text-gray-900 font-medium' : 'text-gray-400'}>
+                    {displayValue || 'Pilih jam'}
+                </span>
+                <svg className={`w-4 h-4 flex-shrink-0 transition-colors ${open ? 'text-violet-500' : 'text-gray-300'}`}
+                    fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+            </button>
+
+            {open && createPortal(
+                <div ref={popupRef}
+                    style={{ position: 'absolute', top: pos.top, left: pos.left, zIndex: 9999 }}
+                    className="bg-white rounded-3xl shadow-2xl border border-gray-100/80 p-4 w-60">
+
+                    <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3 text-center">
+                        Jam Mulai Acara
+                    </p>
+
+                    <div className="flex gap-3">
+                        {/* Hour column */}
+                        <div className="flex-1 flex flex-col">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase text-center mb-2">Jam</p>
+                            <div ref={hourListRef}
+                                className="h-44 overflow-y-auto space-y-0.5 pr-0.5"
+                                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                                {JAM_OPTS.map(h => (
+                                    <button key={h} type="button"
+                                        onClick={() => { setSelH(h); if (selM !== null) confirm(h, selM); }}
+                                        className={`w-full h-10 rounded-xl text-sm font-bold transition-all
+                                            ${selH === h ? 'text-white shadow-md shadow-violet-200'
+                                                         : 'text-gray-600 hover:bg-violet-50 hover:text-violet-700'}`}
+                                        style={selH === h ? { background: 'linear-gradient(135deg,#7c3aed,#4f46e5)' } : {}}>
+                                        {String(h).padStart(2,'0')}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Divider */}
+                        <div className="flex flex-col items-center justify-center gap-1 py-8">
+                            <div className="w-1 h-1 rounded-full bg-gray-300" />
+                            <div className="w-1 h-1 rounded-full bg-gray-300" />
+                        </div>
+
+                        {/* Minute column */}
+                        <div className="flex-1 flex flex-col">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase text-center mb-2">Menit</p>
+                            <div className="space-y-1.5">
+                                {MENIT_OPTS.map(m => (
+                                    <button key={m} type="button"
+                                        onClick={() => { setSelM(m); if (selH !== null) confirm(selH, m); }}
+                                        className={`w-full h-10 rounded-xl text-sm font-bold transition-all
+                                            ${selM === m ? 'text-white shadow-md shadow-violet-200'
+                                                         : 'text-gray-600 hover:bg-violet-50 hover:text-violet-700'}`}
+                                        style={selM === m ? { background: 'linear-gradient(135deg,#7c3aed,#4f46e5)' } : {}}>
+                                        :{String(m).padStart(2,'0')}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Confirm pill */}
+                    {selH !== null && selM !== null && (
+                        <button type="button" onClick={() => confirm(selH, selM)}
+                            className="mt-4 w-full h-10 rounded-2xl text-sm font-bold text-white transition-all"
+                            style={{ background: 'linear-gradient(135deg,#7c3aed,#4f46e5)', boxShadow: '0 4px 16px rgba(124,58,237,0.35)' }}>
+                            ✓ &nbsp;{String(selH).padStart(2,'0')}:{String(selM).padStart(2,'0')} dipilih
+                        </button>
+                    )}
+                </div>,
+                document.body
+            )}
+        </>
     );
 }
