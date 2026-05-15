@@ -13,13 +13,12 @@ use App\Services\AIService;
 use App\Services\InvoiceService;
 use App\Services\WhatsAppService;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Throwable;
 
-class ProcessWhatsAppMessage implements ShouldQueue
+class ProcessWhatsAppMessage
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 

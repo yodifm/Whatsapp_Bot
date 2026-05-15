@@ -1,5 +1,5 @@
 import BackendLayout from '@/layouts/BackendLayout';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import api from '@/api/axios';
 import { Skeleton } from '@/components/Skeleton';
@@ -294,12 +294,47 @@ export default function Dashboard() {
     const [filterPeriod, setFilterPeriod]         = useState('all');
     const [sendText, setSendText]                 = useState('');
     const [sending, setSending]                   = useState(false);
-    const bottomRef = useRef(null);
-    const inputRef  = useRef(null);
+    const bottomRef          = useRef(null);
+    const inputRef           = useRef(null);
+    const selectedCustomerRef = useRef(null);
+    const sinceRef           = useRef(null);
+
+    // Keep ref in sync so polling closure always has latest selected customer
+    useEffect(() => { selectedCustomerRef.current = selectedCustomer; }, [selectedCustomer]);
+
+    const refreshCustomers = useCallback(() => {
+        api.get('/customers').then(r => setCustomers(r.data)).catch(() => {});
+    }, []);
 
     useEffect(() => {
-        api.get('/customers').then(r => setCustomers(r.data));
-    }, []);
+        refreshCustomers();
+
+        // Poll for new messages every 5 seconds
+        const timer = setInterval(async () => {
+            try {
+                const params = sinceRef.current ? { since: sinceRef.current } : {};
+                const r = await api.get('/notifications', { params });
+                sinceRef.current = r.data.server_time;
+
+                if (r.data.messages.length === 0) return;
+
+                // Refresh customer list so last_message / unread count updates
+                refreshCustomers();
+
+                // If open customer received new messages, refresh their chat
+                const current = selectedCustomerRef.current;
+                if (current) {
+                    const relevant = r.data.messages.some(m => m.customer_id === current.id);
+                    if (relevant) {
+                        const msgs = await api.get(`/customers/${current.id}/messages`);
+                        setMessages(msgs.data);
+                    }
+                }
+            } catch {}
+        }, 5000);
+
+        return () => clearInterval(timer);
+    }, [refreshCustomers]);
 
     const selectCustomer = async (customer) => {
         setSelectedCustomer(customer);

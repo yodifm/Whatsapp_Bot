@@ -190,6 +190,7 @@ export default function Sales() {
                         </button>
                     </div>
                 </div>
+                </div>
 
                 {/* Summary cards */}
                 {summary && (
