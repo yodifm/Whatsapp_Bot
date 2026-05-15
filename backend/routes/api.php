@@ -82,10 +82,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/packages/{package}', [PackageController::class, 'destroy']);
 
     // Customer actions
-    Route::get('/customers/{customer}',             [CustomerController::class, 'show']);
-    Route::patch('/customers/{customer}/status',    [CustomerController::class, 'updateStatus']);
-    Route::patch('/customers/{customer}/toggle-ai', [CustomerController::class, 'toggleAI']);
-    Route::post('/customers/{customer}/send',       [CustomerController::class, 'send']);
+    Route::get('/customers/{customer}',                  [CustomerController::class, 'show']);
+    Route::patch('/customers/{customer}/status',         [CustomerController::class, 'updateStatus']);
+    Route::patch('/customers/{customer}/toggle-ai',      [CustomerController::class, 'toggleAI']);
+    Route::post('/customers/{customer}/send',            [CustomerController::class, 'send']);
+    Route::get('/customers/{customer}/followup-message', [CustomerController::class, 'followupMessage']);
 
     // Analytics
     Route::get('/analytics', [AnalyticsController::class, 'index']);
@@ -129,9 +130,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/kiosks',               [KioskController::class, 'index']);
     Route::post('/kiosks',              [KioskController::class, 'store']);
     Route::put('/kiosks/{kiosk}',       [KioskController::class, 'update']);
-    Route::patch('/kiosks/{kiosk}/toggle',    [KioskController::class, 'toggle']);
-    Route::patch('/kiosks/{kiosk}/toggle-ai', [KioskController::class, 'toggleAi']);
-    Route::delete('/kiosks/{kiosk}',    [KioskController::class, 'destroy']);
+    Route::patch('/kiosks/{kiosk}/toggle',     [KioskController::class, 'toggle']);
+    Route::patch('/kiosks/{kiosk}/toggle-ai',  [KioskController::class, 'toggleAi']);
+    Route::post('/kiosks/{kiosk}/pricelist',   [KioskController::class, 'uploadPricelist']);
+    Route::delete('/kiosks/{kiosk}',           [KioskController::class, 'destroy']);
 
     // Logistics — master inventory items
     Route::get('/logistics',                   [LogisticController::class, 'index']);

@@ -3,6 +3,8 @@ import { useState, useRef, useEffect } from 'react';
 import api from '@/api/axios';
 
 function Message({ msg }) {
+    if (msg.hidden) return null;
+
     const isUser  = msg.role === 'user';
     const isError = msg.role === 'error';
 
@@ -119,11 +121,12 @@ function nowTime() {
 }
 
 export default function TestAI() {
-    const [messages, setMessages]     = useState([]);
-    const [input, setInput]           = useState('');
-    const [loading, setLoading]       = useState(false);
-    const [kiosks, setKiosks]         = useState([]);
-    const [selectedKiosk, setSelected] = useState(null); // null = global
+    const [messages, setMessages]       = useState([]);
+    const [input, setInput]             = useState('');
+    const [loading, setLoading]         = useState(false);
+    const [kiosks, setKiosks]           = useState([]);
+    const [selectedKiosk, setSelected]  = useState(null); // null = global
+    const [customerCtx, setCustomerCtx] = useState({});   // tracks sandbox session state
     const bottomRef                   = useRef(null);
     const inputRef                    = useRef(null);
 
@@ -154,8 +157,9 @@ export default function TestAI() {
                 ...prev,
                 { role: 'system-info', content: `Konteks diganti ke: ${label} — percakapan baru dimulai`, time: nowTime() },
             ]);
-            // Reset history so new context starts fresh
+            // Reset history and context so new context starts fresh
             setMessages(prev => [prev[prev.length - 1]]);
+            setCustomerCtx({});
         }
     };
 
@@ -169,11 +173,17 @@ export default function TestAI() {
 
         try {
             const r = await api.post('/test-ai', {
-                message:  msg,
+                message:          msg,
                 history,
-                kiosk_id: selectedKiosk ?? null,
-            });
+                kiosk_id:         selectedKiosk ?? null,
+                customer_context: customerCtx,
+            }, { timeout: 90000 });
             const newMsgs = [];
+
+            // Merge any updated context from backend (e.g. jarak_km after distance calculation)
+            if (r.data.customer_context) {
+                setCustomerCtx(r.data.customer_context);
+            }
 
             if (r.data.pricelist_url) {
                 newMsgs.push({
@@ -183,16 +193,32 @@ export default function TestAI() {
                     aiLabel,
                     time:     nowTime(),
                 });
+                setCustomerCtx(prev => ({ ...prev, pricelist_sent: true }));
             }
 
-            newMsgs.push({
-                role:    'assistant',
-                content: r.data.reply,
-                model:   r.data.model,
-                usage:   r.data.usage,
-                aiLabel,
-                time:    nowTime(),
-            });
+            // Only add assistant message if reply has actual content
+            // (AI sometimes returns tool_use only with empty text — empty content breaks Claude history)
+            if (r.data.reply?.trim()) {
+                newMsgs.push({
+                    role:    'assistant',
+                    content: r.data.reply,
+                    model:   r.data.model,
+                    usage:   r.data.usage,
+                    aiLabel,
+                    time:    nowTime(),
+                });
+            }
+
+            // Safety net: if lead was captured but nothing to show, add generic ack
+            if (r.data.lead_saved && newMsgs.length === 0) {
+                newMsgs.push({
+                    role:    'assistant',
+                    content: `Makasih kak ${r.data.lead_saved.nama ?? ''}! Data sudah kami terima 😊`,
+                    aiLabel,
+                    time:    nowTime(),
+                });
+            }
+
             setMessages(prev => [...prev, ...newMsgs]);
         } catch (err) {
             const errMsg = err.response?.data?.error || 'Gagal menghubungi AI. Pastikan API Key sudah diset di Settings.';
@@ -213,6 +239,7 @@ export default function TestAI() {
     const reset = () => {
         setMessages([]);
         setInput('');
+        setCustomerCtx({});
         inputRef.current?.focus();
     };
 

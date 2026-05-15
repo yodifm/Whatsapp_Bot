@@ -287,6 +287,26 @@ export default function Bookings() {
                                                         {b.jam_mulai} {b.durasi_jam ? `· ${b.durasi_jam} jam` : ''}
                                                     </p>
                                                 )}
+                                                {b.lokasi && (
+                                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                                        <span className="text-xs text-gray-500 flex items-center gap-1">
+                                                            <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                            </svg>
+                                                            {b.lokasi}
+                                                        </span>
+                                                        {b.total_jarak != null && (
+                                                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${
+                                                                b.total_jarak < 60
+                                                                    ? 'bg-green-100 text-green-700'
+                                                                    : 'bg-orange-100 text-orange-700'
+                                                            }`}>
+                                                                ~{b.total_jarak} km · {b.total_jarak < 60 ? 'Transport gratis' : 'Transport berbayar'}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                )}
                                                 <div className="flex flex-wrap gap-2 pt-1">
                                                     <button onClick={() => openEdit(b)}
                                                         className="text-xs text-indigo-600 hover:underline">Edit</button>

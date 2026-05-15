@@ -13,3 +13,6 @@ Schedule::command('wa:followup')->everyFifteenMinutes();
 
 // Reminder H-7, H-3, H-1 setiap hari jam 09:00
 Schedule::command('wa:reminder')->dailyAt('09:00');
+
+// Tandai customer no_reply_yet — cek dua kali sehari
+Schedule::command('customers:mark-no-reply')->twiceDaily(9, 21);

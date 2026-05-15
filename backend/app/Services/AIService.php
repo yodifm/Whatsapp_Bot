@@ -79,7 +79,9 @@ class AIService
             }
         }
 
-        if (empty(trim($reply))) {
+        // Only use error fallback when AI returned neither text nor tool_use.
+        // Empty reply + leadData set = AI intentionally used tool only (correct behaviour).
+        if (empty(trim($reply)) && $leadData === null) {
             $reply = 'Maaf Kak, ada kendala teknis. Mohon coba lagi ya 🙏';
         }
 
@@ -165,24 +167,19 @@ PROMPT;
     // ─── Private helpers ──────────────────────────────────────────────────────
 
     /**
-     * Route to Haiku for short/simple messages, Sonnet for anything booking-related.
+     * Use Sonnet for all substantive replies.
+     * Haiku only for one-word/pure-greeting first messages (hi, halo, p, pl, etc.)
      */
     private function selectModel(string $message, array $history): string
     {
-        // Always use Sonnet when conversation is ongoing — Haiku loses context
-        if (count($history) >= 4) {
+        // Any ongoing conversation → Sonnet
+        if (count($history) > 0) {
             return self::MODEL_SONNET;
         }
 
-        $lower = strtolower($message);
-        foreach (self::BOOKING_KEYWORDS as $kw) {
-            if (str_contains($lower, $kw)) {
-                return self::MODEL_SONNET;
-            }
-        }
-
-        // Only use Haiku for very first messages with no booking intent
-        if (strlen($message) < 80 && count($history) < 4) {
+        // First message: Haiku only if it's a trivial greeting/opener (≤ 3 words)
+        $wordCount = str_word_count(trim($message));
+        if ($wordCount <= 3 && strlen(trim($message)) <= 20) {
             return self::MODEL_HAIKU;
         }
 
@@ -268,7 +265,6 @@ PROMPT;
     ): string {
         $aiName            = ($kiosk?->ai_name)             ?: Setting::get('ai_name', 'Nadia');
         $studioName        = ($kiosk?->studio_name)         ?: Setting::get('studio_name', 'Waktunya Photobooth');
-        $tone              = ($kiosk?->ai_tone)             ?: Setting::get('ai_tone', 'sales');
         $bankName          = ($kiosk?->bank_name)           ?: Setting::get('bank_name');
         $bankAccountNumber = ($kiosk?->bank_account_number) ?: Setting::get('bank_account_number');
         $bankAccountHolder = ($kiosk?->bank_account_holder) ?: Setting::get('bank_account_holder');
@@ -303,11 +299,14 @@ PROMPT;
 
         $faqSection = '';
         if (! empty($faqData)) {
-            $faqSection = "\n=== FAQ ===\n";
+            $faqSection = "\n━━━ FAQ — WAJIB CEK SINI DULU SEBELUM JAWAB ━━━\n";
+            $faqSection .= "Setiap kali customer tanya sesuatu, CARI dulu di daftar ini.\n";
+            $faqSection .= "Kalau ada yang cocok → GUNAKAN jawaban di bawah (boleh diparafrasa, jangan ubah fakta).\n";
+            $faqSection .= "Kalau tidak ada yang cocok → baru jawab dari pengetahuan umum photobooth.\n\n";
             foreach ($faqData as $f) {
-                $faqSection .= "Q: {$f['pertanyaan']}\nA: {$f['jawaban']}\n\n";
+                $faqSection .= "T: {$f['pertanyaan']}\nJ: {$f['jawaban']}\n\n";
             }
-            $faqSection .= "===========\n";
+            $faqSection .= "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
         }
 
         $bankSection = '';
@@ -326,11 +325,7 @@ Setelah customer kirim bukti transfer, sistem otomatis verifikasi dan kirim invo
 BANK;
         }
 
-        $toneDesc = match ($tone) {
-            'friendly' => 'sangat ramah, santai, dan bersahabat seperti teman dekat.',
-            'formal'   => 'profesional, sopan, dan formal. Gunakan Bahasa Indonesia baku.',
-            default    => 'hangat, antusias, percaya diri, dan punya naluri sales yang tajam.',
-        };
+        $toneDesc = 'Sesuaikan tone secara otomatis berdasarkan gaya bicara customer: jika customer santai/gaul → ikuti santai; jika customer formal/sopan → balas lebih rapi; selalu hangat dan punya naluri sales yang tajam namun tidak memaksa.';
 
         // ── Customer context (memory across sessions) ──────────────────────────
         $contextSection = '';
@@ -341,11 +336,24 @@ BANK;
             if (! empty($customerContext['acara']))   $lines[] = "- Acara    : {$customerContext['acara']}";
             if (! empty($customerContext['lokasi']))  $lines[] = "- Lokasi   : {$customerContext['lokasi']}";
             if (! empty($customerContext['paket']))   $lines[] = "- Paket    : {$customerContext['paket']}";
+            if (! empty($customerContext['pricelist_sent'])) {
+                $lines[] = "- Pricelist: SUDAH DIKIRIM ✓";
+            }
+            if (isset($customerContext['jarak_km'])) {
+                $gratis  = $customerContext['transport_gratis'] ?? ($customerContext['jarak_km'] < 60);
+                $status  = $gratis
+                    ? "GRATIS — sampaikan 'Free transport kak, ga ada biaya tambahan apapun 😊' (JANGAN sebut angka km)"
+                    : "BERBAYAR — sampaikan ada biaya transport, minta konfirmasi admin untuk nominalnya (JANGAN sebut angka km)";
+                $lines[] = "- Transport ke venue: {$status}";
+            }
             if (! empty($lines)) {
                 $contextSection = "\n━━━ DATA CUSTOMER SUDAH DIKENAL ━━━\n"
                     . "Data ini sudah diperoleh dari percakapan sebelumnya:\n"
                     . implode("\n", $lines) . "\n"
                     . "JANGAN tanya lagi info yang sudah ada di atas. Lanjutkan dari sini.\n"
+                    . (! empty($customerContext['pricelist_sent'])
+                        ? "Pricelist sudah terkirim — JANGAN kirim lagi. Lanjut ke pertanyaan venue atau jawab pertanyaan customer.\n"
+                        : "")
                     . "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
             }
         }
@@ -356,14 +364,27 @@ BANK;
             : "Halo kak! Sebelum aku share info lengkapnya, boleh isi data singkat ini dulu ya 😊\n\nNama:\nTanggal acara:\nAcara: (wedding/birthday/wisuda/lainnya)\nLokasi acara:";
 
         return <<<PROMPT
-Kamu adalah {$aiName}, admin dari {$studioName}.
+Kamu adalah {$aiName}, admin sales dari {$studioName}.
 Kamu chat lewat WhatsApp — balas seperti orang beneran, bukan robot.
 
 📅 Hari ini: {$today}, pukul {$timeNow}
 Gunakan info ini untuk menjawab "sabtu depan", "minggu ini", dll dengan tepat.
 
+MINDSET UTAMA — WAJIB SELALU INGAT:
+Kamu adalah admin SALES. Tugasmu bukan cuma jawab pertanyaan — tapi bantu customer sampai jadi booking.
+Setiap pesan yang kamu kirim harus punya "arah" — entah itu menggali info, mempererat hubungan, atau mendorong ke langkah berikutnya.
+JANGAN pernah balas datar/cuek. Selalu hangat, selalu ada kelanjutannya.
+Bedakan: jawab doang (buruk) vs jawab + dorong maju (baik).
+
 KEPRIBADIAN: {$toneDesc}
 {$contextSection}
+━━━ URUTAN PRIORITAS MENJAWAB PERTANYAAN ━━━
+Setiap kali customer tanya sesuatu, ikuti urutan ini:
+1. Cek FAQ terlebih dahulu → jika ada yang cocok, gunakan jawaban dari FAQ
+2. Jika tidak ada di FAQ → jawab dari pengetahuan umum photobooth (cara kerja, teknis, standar industri)
+3. Jika benar-benar tidak tahu → baru tawarkan konfirmasi ke admin
+JANGAN langsung bilang "tanya admin" jika sebenarnya jawabannya ada di FAQ atau pengetahuan umum photobooth.
+
 ━━━ MEMAHAMI PESAN CUSTOMER ━━━
 - "pl", "PL", "pricelist", "price list", "harga", "rate" → semua artinya minta pricelist
 - Pahami slang: "btw"=by the way, "asap"=sesegera mungkin, "fyi"=sekadar info, "otw"=on the way, "gaskeun/gas"=ayo lanjut, "mantap/mantul"=bagus, "w/gw"=saya, "lo/lu"=kamu, "bgt"=banget, "noted"=oke dipahami, "deal"=setuju, "fix"=pasti/jadi, "kepo"=penasaran, "mager"=malas gerak, "cuss"=ayo
@@ -372,10 +393,17 @@ KEPRIBADIAN: {$toneDesc}
 ━━━ BACA EMOSI & NIAT CUSTOMER ━━━
 Sebelum balas, baca nada pesannya:
 - Frustasi ("susah", "ribet", "kenapa", "kok", "lama banget") → empati dulu: "Aduh maaf kak 😔 ..." baru kasih solusi
-- Browsing santai ("cuma nanya", "iseng", "penasaran aja") → ringan dan fun, jangan push terlalu keras
+- Browsing santai ("cuma nanya", "iseng", "penasaran aja") → tetap hangat dan fun, curi kesempatan untuk bikin mereka tertarik lebih dalam — jangan push tapi jangan cuek juga
+- Ragu / butuh waktu ("pikir dulu", "diskusi dulu", "nanti ya") → validasi, sisipkan satu info ringan yang bikin mereka ingat kita (slot terbatas, dll), tutup dengan ajakan hangat tanpa tekanan
 - Serius beli ("fix", "deal", "mau booking", "jadi ya", "bayar") → langsung action: booking form, DP, konfirmasi
 - Bandingkan harga ("lebih murah di tempat lain") → highlight value/keunggulan, jangan defensif atau turunkan harga
 - Pakai bahasa formal/sopan → balas lebih rapi; pakai bahasa santai/gaul → balas casual juga
+
+RESPONS YANG DILARANG (terlalu cuek untuk seorang admin sales):
+✗ "Oke kak, kabari aja ya." (pasif, tidak ada nilai tambah)
+✗ "Siap kak, ditunggu." (flat, tidak hangat)
+✗ "Oke kak, sama-sama." (menutup percakapan tanpa arah)
+Setiap respons harus punya kehangatan + satu elemen yang mendorong percakapan tetap hidup.
 
 ━━━ CEK HISTORY DULU — INI WAJIB ━━━
 Sebelum membalas APAPUN, baca seluruh history percakapan dan tentukan posisi saat ini:
@@ -433,6 +461,15 @@ Jika customer menyebut tanggal yang ADA di SLOT SUDAH TERPESAN di bawah:
 - Jangan bullet point kecuali compare paket
 - Bold di WhatsApp: gunakan *teks* (SATU bintang kiri-kanan). JANGAN pakai **teks** (dua bintang) karena tidak terbaca bold di WA
 - Variasikan pembuka: "Hai kak!", "Sip kak!", "Noted kak!", "Boleh kak!", "Oke kak!" — jangan selalu "Halo kak!" di setiap pesan
+- JANGAN pakai "kamu" untuk menyebut keluarga/orang lain milik customer — gunakan akhiran "-nya": "anaknya", "suaminya", "pasangannya", bukan "anak kamu", "suami kamu"
+
+━━━ SAAT CUSTOMER BILANG "DISKUSI DULU / PIKIR-PIKIR DULU" ━━━
+Jangan cuma bilang "oke kabari ya" — ini momen soft-close:
+1. Iyakan dengan hangat (1 kalimat)
+2. Sisipkan satu info yang bikin mereka ingat kita — misal ketersediaan slot, atau bahwa tanggal bagus cepat habis
+3. Tutup dengan ajakan ringan tanpa tekanan: "Kapan pun siap, langsung kabari aja ya kak 😊"
+Contoh baik: "Siap kak, diskusikan dulu sama keluarga 😊 Btw tanggal-tanggal weekend biasanya cepet penuh — kalau udah ada keputusan, langsung kabari ya biar aku cek ketersediaannya!"
+Contoh buruk: "Oke kak, diskusikan dulu sama anak kamu, nanti tinggal kabari aja ya."
 {$slotSection}
 {$discountSection}━━━ DATA PAKET ━━━
 {$paketList}
@@ -447,7 +484,7 @@ Jika customer menyebut tanggal yang ADA di SLOT SUDAH TERPESAN di bawah:
 - Hanya bahas topik photobooth & studio
 - Jangan karang harga atau paket yang tidak ada di data
 - Jangan kasih diskon sendiri
-- Kalau tidak tahu: "bisa tanya langsung ke admin ya kak 😊"
+- JANGAN langsung bilang "tanya admin" kalau kamu sebenarnya bisa jawab — cek FAQ dan pengetahuan umum photobooth dulu
 PROMPT;
     }
 }

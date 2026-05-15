@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Backend;
 use App\Http\Controllers\Controller;
 use App\Models\ChatHistory;
 use App\Models\Customer;
+use App\Models\Discount;
+use App\Models\Setting;
 use App\Services\WhatsAppService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -50,12 +52,39 @@ class CustomerController extends Controller
     public function updateStatus(Request $request, Customer $customer): JsonResponse
     {
         $request->validate([
-            'status' => 'required|in:new,interested,followup,booked,done',
+            'status' => 'required|in:new,interested,followup,booked,done,no_reply_yet',
         ]);
 
         $customer->update(['status' => $request->status]);
 
         return response()->json(['status' => $customer->status]);
+    }
+
+    public function followupMessage(Customer $customer): JsonResponse
+    {
+        $aiName     = Setting::get('ai_name', 'Nadia');
+        $nama       = $customer->nama ? " kak {$customer->nama}" : ' kak';
+
+        $discounts = Discount::where('aktif', true)
+            ->where('berlaku_sampai', '>=', now()->toDateString())
+            ->get();
+
+        $discountLine = '';
+        if ($discounts->isNotEmpty()) {
+            $promoList = $discounts->map(fn($d) => "• {$d->nama}: {$d->label} (s/d {$d->berlaku_sampai->format('d M Y')})")->join("\n");
+            $discountLine = "\n\nOmong-omong{$nama}, lagi ada promo nih 🎉\n{$promoList}\nSayang banget kalau kelewatan!";
+        }
+
+        $message = "Halo{$nama}! Aku {$aiName} dari Waktunya Photobooth 😊"
+            . "\n\nSebelumnya aku udah kirim info, tapi kayaknya belum sempet bales ya? Gapapa banget, aku mau tanya lagi aja nih — masih tertarik dengan layanan photobooth kami?"
+            . $discountLine
+            . "\n\nKalau iya, boleh share dulu ya:\n\nNama:\nTanggal acara:\nAcara: (wedding/birthday/wisuda/lainnya)\nLokasi acara:"
+            . "\n\nBiar aku bisa bantu cek ketersediaan dan info lengkapnya! 😊";
+
+        return response()->json([
+            'message'   => $message,
+            'discounts' => $discounts->map(fn($d) => ['nama' => $d->nama, 'label' => $d->label])->values(),
+        ]);
     }
 
     public function toggleAI(Customer $customer): JsonResponse

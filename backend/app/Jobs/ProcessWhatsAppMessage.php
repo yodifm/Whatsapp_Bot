@@ -9,7 +9,9 @@ use App\Models\Discount;
 use App\Models\Faq;
 use App\Models\Kiosk;
 use App\Models\Package;
+use App\Models\Setting;
 use App\Services\AIService;
+use App\Services\DistanceService;
 use App\Services\InvoiceService;
 use App\Services\WhatsAppService;
 use Illuminate\Bus\Queueable;
@@ -55,7 +57,7 @@ class ProcessWhatsAppMessage
                 ],
             );
 
-            if ($customer->status === 'new') {
+            if (in_array($customer->status, ['new', 'no_reply_yet'])) {
                 $customer->update(['status' => 'interested']);
             }
 
@@ -74,7 +76,8 @@ class ProcessWhatsAppMessage
                 'content'     => $userText,
             ]);
 
-            if ($kiosk && ! $kiosk->ai_enabled) return;
+            // 'test' mode = AI only responds in sandbox, not real WA
+            if ($kiosk && ($kiosk->ai_mode ?? 'active') !== 'active') return;
             if ($customer->ai_paused) return;
 
             // Detect request for human agent
@@ -99,7 +102,7 @@ class ProcessWhatsAppMessage
                     if ($kiosk) $q->orWhere('kiosk_id', $kiosk->id);
                 })->get()->toArray();
 
-            $faqs = Faq::where('aktif', true)->orderBy('urutan')->get()->toArray();
+            $faqs = Faq::where('aktif', true)->orderBy('urutan')->limit(30)->get()->toArray();
 
             $discounts = Discount::where('aktif', true)
                 ->where('berlaku_sampai', '>=', now()->toDateString())
@@ -128,42 +131,111 @@ class ProcessWhatsAppMessage
             if ($leadData && ! empty($leadData['nama'])) {
                 $customer->update(['nama' => $leadData['nama'], 'status' => 'interested']);
 
+                // Calculate distance if venue is known
+                $venueLokasiStr = $leadData['lokasi'] ?? null;
+                $jarakResult    = $venueLokasiStr
+                    ? app(DistanceService::class)->calculate($venueLokasiStr)
+                    : null;
+
                 $newContext = array_merge($currentContext, array_filter([
                     'nama'    => $leadData['nama']    ?? null,
                     'tanggal' => $leadData['tanggal'] ?? null,
                     'acara'   => $leadData['acara']   ?? null,
-                    'lokasi'  => $leadData['lokasi']  ?? null,
+                    'lokasi'  => $venueLokasiStr,
                 ]));
+
+                if ($jarakResult) {
+                    $newContext['jarak_km']         = $jarakResult['km'];
+                    $newContext['transport_gratis']  = $jarakResult['gratis'];
+                }
 
                 if (! empty($leadData['tanggal'])) {
                     Booking::updateOrCreate(
                         ['customer_id' => $customer->id, 'status' => 'pending'],
                         [
-                            'tanggal'    => $leadData['tanggal'],
-                            'nama_acara' => $leadData['acara'] ?? null,
-                            'catatan'    => isset($leadData['lokasi']) ? 'Lokasi: ' . $leadData['lokasi'] : null,
+                            'tanggal'     => $leadData['tanggal'],
+                            'nama_acara'  => $leadData['acara'] ?? null,
+                            'lokasi'      => $venueLokasiStr,
+                            'catatan'     => $venueLokasiStr ? 'Lokasi: ' . $venueLokasiStr : null,
+                            'total_jarak' => $jarakResult['km'] ?? null,
                         ],
                     );
                 }
 
                 // Only send pricelist once — skip if already sent in a previous session
                 if (! $pricelistAlready) {
-                    $newContext['pricelist_sent'] = true;
-                    $customer->update(['ai_context' => $newContext]);
-
-                    // Send AI text first (it summarises the collected data), then pricelist image
+                    // Send AI text first (if any — AI may return tool_use only, which is valid)
                     if (! empty(trim($aiReply))) {
                         $waService->sendText($waId, $aiReply);
                         ChatHistory::create(['customer_id' => $customer->id, 'role' => 'assistant', 'content' => $aiReply]);
                     }
 
-                    $pricelistUrl = url('images/pricelist.jpg');
-                    $waService->sendImage($waId, $pricelistUrl, "Berikut pricelist kami, apabila ada pertanyaan silakan yaa kak☺️");
-                    ChatHistory::create(['customer_id' => $customer->id, 'role' => 'assistant', 'content' => '[Pricelist dikirim]']);
+                    // Fonnte needs a publicly accessible URL to deliver images.
+                    // Priority: any non-localhost URL first, multipart file as localhost fallback.
+                    $caption  = "Berikut pricelist kami, apabila ada pertanyaan silakan yaa kak☺️";
+                    $isLocal  = fn(?string $u) => $u && (str_contains($u, 'localhost') || str_contains($u, '127.0.0.1'));
+
+                    // Gather all URL candidates
+                    // pricelist_cdn_url = user-provided public URL (ImgBB, etc.) — always works
+                    // pricelist_url     = server-derived URL (only works in production, not localhost)
+                    $kioskUrl   = $kiosk?->pricelist_cdn_url ?: $kiosk?->pricelist_url;
+                    $globalUrl  = Setting::get('pricelist_url');
+                    $defaultUrl = null;
+                    $localPath  = null;
+
+                    foreach (['jpg', 'jpeg', 'png', 'pdf'] as $ext) {
+                        $c = public_path("pricelists/default.{$ext}");
+                        if (file_exists($c)) {
+                            $defaultUrl = url("pricelists/default.{$ext}");
+                            $localPath  = $c;
+                            break;
+                        }
+                    }
+
+                    // Pick the best non-localhost URL; prefer kiosk-specific over global
+                    $publicUrl = null;
+                    foreach ([$kioskUrl, $defaultUrl, $globalUrl] as $candidate) {
+                        if ($candidate && ! $isLocal($candidate)) {
+                            $publicUrl = $candidate;
+                            break;
+                        }
+                    }
+
+                    if ($publicUrl) {
+                        // Production path — Fonnte downloads from a real public URL
+                        $waService->sendImage($waId, $publicUrl, $caption);
+                        $newContext['pricelist_sent'] = true;
+                        $customer->update(['ai_context' => $newContext]);
+                        ChatHistory::create(['customer_id' => $customer->id, 'role' => 'assistant', 'content' => '[Pricelist dikirim]']);
+                    } else {
+                        // Localhost / dev — try multipart file upload (works if Fonnte supports it)
+                        $filePath = $kiosk?->pricelist_file_path ?? $localPath;
+                        if ($filePath && file_exists($filePath)) {
+                            $waService->sendImageFile($waId, $filePath, $caption);
+                            $newContext['pricelist_sent'] = true;
+                            $customer->update(['ai_context' => $newContext]);
+                            ChatHistory::create(['customer_id' => $customer->id, 'role' => 'assistant', 'content' => '[Pricelist dikirim]']);
+                        } else {
+                            $fallback = "Makasih kak! Data sudah kami terima 😊 Sebentar kami share info lengkap dan pricelist ya!";
+                            $waService->sendText($waId, $fallback);
+                            $newContext['pricelist_sent'] = true;
+                            $customer->update(['ai_context' => $newContext]);
+                            ChatHistory::create(['customer_id' => $customer->id, 'role' => 'assistant', 'content' => $fallback]);
+                        }
+                    }
                     return; // done — don't send aiReply again below
                 }
 
                 $customer->update(['ai_context' => $newContext]);
+
+                // Pricelist was already sent in a prior session but AI returned only
+                // tool_use (no text). Acknowledge so customer isn't left with no reply.
+                if (empty(trim($aiReply))) {
+                    $ack = 'Makasih kak ' . ($leadData['nama'] ?? '') . '! Data sudah kami catat 😊 Ada yang bisa dibantu lagi?';
+                    $waService->sendText($waId, $ack);
+                    ChatHistory::create(['customer_id' => $customer->id, 'role' => 'assistant', 'content' => $ack]);
+                    return;
+                }
             }
 
             // Normal reply (no pricelist triggered, or pricelist already sent before)
@@ -174,6 +246,10 @@ class ProcessWhatsAppMessage
 
         } catch (Throwable $e) {
             logger()->error('WhatsApp job error', ['message' => $e->getMessage(), 'trace' => $e->getTraceAsString(), 'wa_id' => $waId]);
+            // Always send a fallback so customer isn't left with no reply
+            try {
+                $waService->sendText($waId, 'Maaf Kak, ada kendala teknis. Mohon coba lagi ya 🙏');
+            } catch (Throwable) {}
         }
     }
 
@@ -196,7 +272,7 @@ class ProcessWhatsAppMessage
             'content'     => '[Gambar dikirim]' . ($caption ? ': ' . $caption : ''),
         ]);
 
-        if ($kiosk && ! $kiosk->ai_enabled) return;
+        if ($kiosk && ($kiosk->ai_mode ?? 'active') !== 'active') return;
         if ($customer->ai_paused) return;
         if (! $mediaId && ! $mediaUrl) return;
 

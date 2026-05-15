@@ -24,16 +24,18 @@ class BookingController extends Controller
         }
 
         return response()->json($query->get()->map(fn($b) => [
-            'id'         => $b->id,
-            'customer'   => ['id' => $b->customer->id, 'nama' => $b->customer->nama],
-            'package'    => $b->package ? ['id' => $b->package->id, 'nama' => $b->package->nama] : null,
-            'tanggal'    => $b->tanggal->format('Y-m-d'),
-            'jam_mulai'  => $b->jam_mulai,
-            'durasi_jam' => $b->durasi_jam,
-            'nama_acara' => $b->nama_acara,
-            'catatan'    => $b->catatan,
-            'status'     => $b->status,
-            'dp_amount'  => $b->dp_amount,
+            'id'          => $b->id,
+            'customer'    => ['id' => $b->customer->id, 'nama' => $b->customer->nama],
+            'package'     => $b->package ? ['id' => $b->package->id, 'nama' => $b->package->nama] : null,
+            'tanggal'     => $b->tanggal->format('Y-m-d'),
+            'jam_mulai'   => $b->jam_mulai,
+            'durasi_jam'  => $b->durasi_jam,
+            'nama_acara'  => $b->nama_acara,
+            'lokasi'      => $b->lokasi,
+            'total_jarak' => $b->total_jarak,
+            'catatan'     => $b->catatan,
+            'status'      => $b->status,
+            'dp_amount'   => $b->dp_amount,
         ]));
     }
 

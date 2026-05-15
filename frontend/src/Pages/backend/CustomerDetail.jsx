@@ -14,11 +14,12 @@ const STATUS_CFG = {
 };
 
 const CUST_STATUS = {
-    new:        'bg-gray-100 text-gray-600',
-    interested: 'bg-blue-100 text-blue-700',
-    followup:   'bg-orange-100 text-orange-700',
-    booked:     'bg-green-100 text-green-700',
-    done:       'bg-violet-100 text-violet-700',
+    new:           { cls: 'bg-gray-100 text-gray-600',   label: 'New' },
+    interested:    { cls: 'bg-blue-100 text-blue-700',   label: 'Interested' },
+    followup:      { cls: 'bg-orange-100 text-orange-700', label: 'Follow-up' },
+    booked:        { cls: 'bg-green-100 text-green-700', label: 'Booked' },
+    done:          { cls: 'bg-violet-100 text-violet-700', label: 'Done' },
+    no_reply_yet:  { cls: 'bg-red-100 text-red-600',     label: 'No Reply Yet' },
 };
 
 function formatRp(n) {
@@ -31,11 +32,13 @@ export default function CustomerDetail() {
     const toast      = useToast();
     const [data,     setData]     = useState(null);
     const [loading,  setLoading]  = useState(true);
-    const [messages, setMessages] = useState([]);
-    const [loadMsgs, setLoadMsgs] = useState(false);
-    const [showChat, setShowChat] = useState(false);
-    const [sendText, setSendText] = useState('');
-    const [sending,  setSending]  = useState(false);
+    const [messages,     setMessages]     = useState([]);
+    const [loadMsgs,     setLoadMsgs]     = useState(false);
+    const [showChat,     setShowChat]     = useState(false);
+    const [sendText,     setSendText]     = useState('');
+    const [sending,      setSending]      = useState(false);
+    const [changingStatus, setChangingStatus] = useState(false);
+    const [loadingFollowup, setLoadingFollowup] = useState(false);
 
     useEffect(() => {
         api.get(`/customers/${id}`)
@@ -53,6 +56,35 @@ export default function CustomerDetail() {
             setShowChat(true);
         } finally {
             setLoadMsgs(false);
+        }
+    };
+
+    const changeStatus = async (newStatus) => {
+        setChangingStatus(true);
+        try {
+            await api.patch(`/customers/${id}/status`, { status: newStatus });
+            setData(d => ({ ...d, status: newStatus }));
+            toast.success('Status diperbarui');
+        } catch {
+            toast.error('Gagal ubah status');
+        } finally {
+            setChangingStatus(false);
+        }
+    };
+
+    const loadFollowup = async () => {
+        setLoadingFollowup(true);
+        try {
+            const r = await api.get(`/customers/${id}/followup-message`);
+            setSendText(r.data.message);
+            if (!showChat) {
+                await loadChat();
+            }
+            toast.success(r.data.discounts?.length ? `Follow-up dengan ${r.data.discounts.length} promo aktif siap dikirim!` : 'Pesan follow-up siap dikirim');
+        } catch {
+            toast.error('Gagal muat pesan follow-up');
+        } finally {
+            setLoadingFollowup(false);
         }
     };
 
@@ -111,9 +143,25 @@ export default function CustomerDetail() {
                         <h1 className="text-xl font-bold text-gray-900">{data.nama}</h1>
                         <p className="text-sm text-gray-400">Customer sejak {data.created_at}</p>
                     </div>
-                    <span className={`ml-auto text-xs font-semibold px-2.5 py-1 rounded-full ${CUST_STATUS[data.status] ?? 'bg-gray-100 text-gray-600'}`}>
-                        {data.status}
-                    </span>
+                    <div className="ml-auto flex items-center gap-2">
+                        {data.status === 'no_reply_yet' && (
+                            <button
+                                onClick={loadFollowup}
+                                disabled={loadingFollowup}
+                                className="flex items-center gap-1.5 text-xs bg-red-600 hover:bg-red-700 text-white font-semibold px-3 py-1.5 rounded-lg transition disabled:opacity-50">
+                                {loadingFollowup ? '...' : '📨 Kirim Follow-up'}
+                            </button>
+                        )}
+                        <select
+                            value={data.status}
+                            onChange={e => changeStatus(e.target.value)}
+                            disabled={changingStatus}
+                            className={`text-xs font-semibold px-2.5 py-1 rounded-full border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-400 ${(CUST_STATUS[data.status] ?? CUST_STATUS.new).cls}`}>
+                            {Object.entries(CUST_STATUS).map(([k, v]) => (
+                                <option key={k} value={k}>{v.label}</option>
+                            ))}
+                        </select>
+                    </div>
                 </div>
 
                 {/* KPI Cards */}
