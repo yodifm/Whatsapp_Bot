@@ -34,6 +34,32 @@ class WhatsAppService
         $this->send(['target' => $to, 'message' => $caption ?: ' ', 'url' => $imageUrl, 'delay' => 2]);
     }
 
+    public function sendImageFile(string $to, string $filePath, string $caption = ''): void
+    {
+        $response = $this->client->post('/send', [
+            'headers'   => ['Authorization' => $this->token],
+            'multipart' => [
+                ['name' => 'target',  'contents' => $to],
+                ['name' => 'message', 'contents' => $caption ?: ' '],
+                ['name' => 'delay',   'contents' => '2'],
+                ['name' => 'file',    'contents' => fopen($filePath, 'r'), 'filename' => basename($filePath)],
+            ],
+        ]);
+
+        $body = json_decode($response->getBody()->getContents(), true);
+        logger()->info('Fonnte sendImageFile', [
+            'http_status' => $response->getStatusCode(),
+            'status'      => $body['status']  ?? null,
+            'reason'      => $body['reason']  ?? null,
+            'target'      => $to,
+            'file'        => basename($filePath),
+        ]);
+
+        if (isset($body['status']) && $body['status'] === false) {
+            throw new \RuntimeException('Fonnte file upload failed: ' . ($body['reason'] ?? 'unknown error'));
+        }
+    }
+
     public function sendDocument(string $to, string $filePath, string $filename, string $caption = ''): void
     {
         // Fonnte accepts public URL — derive it from the file path under public/

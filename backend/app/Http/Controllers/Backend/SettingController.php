@@ -23,6 +23,7 @@ class SettingController extends Controller
         'bank_name',
         'bank_account_number',
         'bank_account_holder',
+        'pricelist_url',
     ];
 
     public function index(): JsonResponse
@@ -55,6 +56,7 @@ class SettingController extends Controller
             'bank_name'           => 'nullable|string|max:100',
             'bank_account_number' => 'nullable|string|max:50',
             'bank_account_holder' => 'nullable|string|max:100',
+            'pricelist_url'       => 'nullable|url|max:500',
         ]);
 
         foreach ($validated as $key => $value) {

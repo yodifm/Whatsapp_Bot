@@ -2,11 +2,6 @@ import { useState, useEffect } from 'react';
 import BackendLayout from '@/Layouts/BackendLayout';
 import api from '@/api/axios';
 
-const TONE_OPTIONS = [
-    { value: 'sales',    label: 'Sales — Hangat & persuasif' },
-    { value: 'friendly', label: 'Friendly — Santai seperti teman' },
-    { value: 'formal',   label: 'Formal — Profesional & baku' },
-];
 
 const EMPTY_FORM = {
     name: '',
@@ -14,22 +9,23 @@ const EMPTY_FORM = {
     wa_access_token: '',
     wa_verify_token: '',
     ai_name: '',
-    ai_tone: 'sales',
     studio_name: '',
     bank_name: '',
     bank_account_number: '',
     bank_account_holder: '',
+    pricelist_cdn_url: '',
 };
 
 export default function Kiosks() {
     const [kiosks, setKiosks]       = useState([]);
     const [loading, setLoading]     = useState(true);
     const [showModal, setShowModal] = useState(false);
-    const [editing, setEditing]     = useState(null); // kiosk object or null
+    const [editing, setEditing]     = useState(null);
     const [form, setForm]           = useState(EMPTY_FORM);
     const [saving, setSaving]       = useState(false);
     const [error, setError]         = useState('');
-    const [deleteTarget, setDeleteTarget] = useState(null);
+    const [deleteTarget, setDeleteTarget]   = useState(null);
+    const [pricelistFile, setPricelistFile] = useState(null);
 
     const load = async () => {
         setLoading(true);
@@ -49,22 +45,24 @@ export default function Kiosks() {
         setEditing(null);
         setForm(EMPTY_FORM);
         setError('');
+        setPricelistFile(null);
         setShowModal(true);
     };
 
     const openEdit = (k) => {
         setEditing(k);
+        setPricelistFile(null);
         setForm({
             name:                k.name                || '',
             wa_phone_number_id:  k.wa_phone_number_id  || '',
             wa_access_token:     k.wa_access_token     || '', // masked
             wa_verify_token:     k.wa_verify_token     || '',
             ai_name:             k.ai_name             || '',
-            ai_tone:             k.ai_tone             || 'sales',
             studio_name:         k.studio_name         || '',
             bank_name:           k.bank_name           || '',
             bank_account_number: k.bank_account_number || '',
             bank_account_holder: k.bank_account_holder || '',
+            pricelist_cdn_url:   k.pricelist_cdn_url   || '',
         });
         setError('');
         setShowModal(true);
@@ -82,11 +80,28 @@ export default function Kiosks() {
         setSaving(true);
         setError('');
         try {
+            let savedId = editing?.id;
+            // Clean up empty strings so nullable fields stay null on the backend
+            const payload = { ...form };
+            if (!payload.pricelist_cdn_url?.trim()) delete payload.pricelist_cdn_url;
+
             if (editing) {
-                await api.put(`/kiosks/${editing.id}`, form);
+                await api.put(`/kiosks/${editing.id}`, payload);
             } else {
-                await api.post('/kiosks', form);
+                const res = await api.post('/kiosks', payload);
+                savedId = res.data.id;
             }
+
+            // Upload pricelist if a file was selected
+            if (pricelistFile && savedId) {
+                const fd = new FormData();
+                fd.append('file', pricelistFile);
+                await api.post(`/kiosks/${savedId}/pricelist`, fd, {
+                    headers: { 'Content-Type': 'multipart/form-data' },
+                });
+                setPricelistFile(null);
+            }
+
             setShowModal(false);
             load();
         } catch (err) {
@@ -99,6 +114,7 @@ export default function Kiosks() {
         }
     };
 
+
     const handleToggle = async (k) => {
         try {
             await api.patch(`/kiosks/${k.id}/toggle`);
@@ -110,11 +126,18 @@ export default function Kiosks() {
 
     const handleToggleAi = async (k) => {
         try {
-            await api.patch(`/kiosks/${k.id}/toggle-ai`);
+            const res = await api.patch(`/kiosks/${k.id}/toggle-ai`);
+            const nextMode = res.data.ai_mode;
             setKiosks(prev => prev.map(item =>
-                item.id === k.id ? { ...item, ai_enabled: !item.ai_enabled } : item
+                item.id === k.id ? { ...item, ai_mode: nextMode, ai_enabled: nextMode === 'active' } : item
             ));
         } catch { /* ignore */ }
+    };
+
+    const AI_MODE_CONFIG = {
+        active: { label: 'AI Aktif',   icon: '🤖', bg: 'bg-indigo-50',  text: 'text-indigo-700',  hover: 'hover:bg-indigo-100',  dot: 'bg-indigo-400' },
+        human:  { label: 'Mode Human', icon: '👤', bg: 'bg-amber-50',   text: 'text-amber-700',   hover: 'hover:bg-amber-100',   dot: 'bg-gray-300'   },
+        test:   { label: 'Mode Test',  icon: '🧪', bg: 'bg-purple-50',  text: 'text-purple-700',  hover: 'hover:bg-purple-100',  dot: 'bg-purple-400' },
     };
 
     const handleDelete = async () => {
@@ -208,7 +231,7 @@ export default function Kiosks() {
                                     </div>
                                     <div className="flex items-center gap-1.5">
                                         <span className="text-gray-300">🤖</span>
-                                        <span>{k.ai_name || 'Nadia'} — {TONE_OPTIONS.find(t => t.value === k.ai_tone)?.label.split(' — ')[0] || 'Sales'}</span>
+                                        <span>{k.ai_name || 'Nadia'}{k.ai_tone ? ` — ${k.ai_tone}` : ''}</span>
                                     </div>
                                     {k.bank_name && (
                                         <div className="flex items-center gap-1.5">
@@ -216,23 +239,37 @@ export default function Kiosks() {
                                             <span>{k.bank_name} · {k.bank_account_number}</span>
                                         </div>
                                     )}
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="text-gray-300">🖼️</span>
+                                        {k.pricelist_cdn_url
+                                            ? <span className="text-green-600 font-medium">Pricelist siap kirim WA</span>
+                                            : k.pricelist_url
+                                                ? <span className="text-amber-500">File ada, URL WA belum diset</span>
+                                                : <span className="text-amber-500">Belum ada pricelist</span>
+                                        }
+                                    </div>
                                 </div>
 
-                                {/* AI toggle row */}
+                                {/* AI mode row */}
                                 <div className="pt-1 border-t border-gray-50">
-                                    <button onClick={() => handleToggleAi(k)}
-                                        className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-medium transition-colors
-                                            ${k.ai_enabled
-                                                ? 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
-                                                : 'bg-amber-50 text-amber-700 hover:bg-amber-100'}`}>
-                                        <span className="flex items-center gap-2">
-                                            <span className="text-base">{k.ai_enabled ? '🤖' : '👤'}</span>
-                                            <span>{k.ai_enabled ? 'AI Aktif' : 'Mode Human'}</span>
-                                        </span>
-                                        <div className={`w-9 h-5 rounded-full relative transition-colors ${k.ai_enabled ? 'bg-indigo-400' : 'bg-gray-300'}`}>
-                                            <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${k.ai_enabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
-                                        </div>
-                                    </button>
+                                    {(() => {
+                                        const mode = k.ai_mode ?? 'active';
+                                        const cfg  = AI_MODE_CONFIG[mode] ?? AI_MODE_CONFIG.active;
+                                        const nextLabels = { active: '→ Human', human: '→ Test', test: '→ AI Aktif' };
+                                        return (
+                                            <button onClick={() => handleToggleAi(k)}
+                                                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-medium transition-colors ${cfg.bg} ${cfg.text} ${cfg.hover}`}>
+                                                <span className="flex items-center gap-2">
+                                                    <span className="text-base">{cfg.icon}</span>
+                                                    <span>{cfg.label}</span>
+                                                    {mode === 'test' && (
+                                                        <span className="text-[10px] font-normal opacity-70">sandbox only</span>
+                                                    )}
+                                                </span>
+                                                <span className="text-[10px] opacity-50 font-normal">{nextLabels[mode]}</span>
+                                            </button>
+                                        );
+                                    })()}
                                 </div>
 
                                 {/* Status + Actions */}
@@ -323,17 +360,6 @@ export default function Kiosks() {
                                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Persona AI</p>
                                 <div className="space-y-3">
                                     {field('ai_name', 'Nama AI', 'text', 'Misal: Nadia, Sari, Budi')}
-                                    <div>
-                                        <label className="block text-xs font-medium text-gray-600 mb-1">Tone AI</label>
-                                        <select
-                                            value={form.ai_tone}
-                                            onChange={e => setForm(f => ({ ...f, ai_tone: e.target.value }))}
-                                            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white">
-                                            {TONE_OPTIONS.map(t => (
-                                                <option key={t.value} value={t.value}>{t.label}</option>
-                                            ))}
-                                        </select>
-                                    </div>
                                 </div>
                             </div>
 
@@ -344,6 +370,104 @@ export default function Kiosks() {
                                     {field('bank_name', 'Nama Bank', 'text', 'BCA / Mandiri / BRI ...')}
                                     {field('bank_account_number', 'Nomor Rekening', 'text', '1234567890')}
                                     {field('bank_account_holder', 'Atas Nama', 'text', 'John Doe')}
+                                </div>
+                            </div>
+
+                            {/* Pricelist */}
+                            <div>
+                                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Pricelist</p>
+                                <div className="space-y-3">
+
+                                    {/* URL gambar publik — ini yang dipakai Fonnte untuk kirim ke WA */}
+                                    <div>
+                                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                                            URL Gambar Pricelist
+                                            <span className="ml-1 text-indigo-500 font-semibold">(wajib agar tampil sebagai gambar di WA)</span>
+                                        </label>
+                                        <input
+                                            type="url"
+                                            value={form.pricelist_cdn_url}
+                                            onChange={e => setForm(f => ({ ...f, pricelist_cdn_url: e.target.value }))}
+                                            placeholder="https://i.ibb.co/xxx/pricelist.jpg"
+                                            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 font-mono"
+                                        />
+                                        {form.pricelist_cdn_url ? (
+                                            <div className="mt-2 flex items-center gap-2">
+                                                <span className="inline-flex items-center gap-1 text-xs text-green-600 font-medium bg-green-50 px-2 py-0.5 rounded-full">
+                                                    <span>✓</span> URL tersimpan — gambar akan dikirim via WA
+                                                </span>
+                                                <a href={form.pricelist_cdn_url} target="_blank" rel="noreferrer"
+                                                    className="text-xs text-indigo-500 hover:underline">Preview ↗</a>
+                                            </div>
+                                        ) : (
+                                            <p className="mt-1.5 text-xs text-amber-600">
+                                                Upload gambar ke <a href="https://imgbb.com" target="_blank" rel="noreferrer" className="underline">imgbb.com</a> (gratis) → copy <strong>Direct link</strong> → paste di sini
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    {/* Divider */}
+                                    <div className="flex items-center gap-2">
+                                        <div className="flex-1 h-px bg-gray-100" />
+                                        <span className="text-[11px] text-gray-400">file lokal (opsional)</span>
+                                        <div className="flex-1 h-px bg-gray-100" />
+                                    </div>
+
+                                    {/* Current pricelist — show preview + Ganti button */}
+                                    {editing?.pricelist_url && !pricelistFile && (
+                                        <div className="rounded-xl border border-gray-100 bg-gray-50 overflow-hidden">
+                                            {editing.pricelist_url.endsWith('.pdf') ? (
+                                                <div className="flex items-center gap-3 px-4 py-3">
+                                                    <span className="text-2xl">📄</span>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-sm font-medium text-gray-700">Pricelist PDF tersimpan</p>
+                                                        <a href={editing.pricelist_url} target="_blank" rel="noreferrer"
+                                                            className="text-xs text-indigo-500 hover:underline">Lihat file ↗</a>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <img src={editing.pricelist_url} alt="Pricelist"
+                                                    className="w-full max-h-36 object-contain" />
+                                            )}
+                                            <label className="flex items-center justify-center gap-2 w-full border-t border-gray-100 px-4 py-2 cursor-pointer hover:bg-gray-100 transition">
+                                                <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                                </svg>
+                                                <span className="text-sm font-medium text-gray-500">Ganti File</span>
+                                                <input type="file" accept=".jpg,.jpeg,.png,.pdf" className="hidden"
+                                                    onChange={e => setPricelistFile(e.target.files[0] || null)} />
+                                            </label>
+                                        </div>
+                                    )}
+
+                                    {/* No pricelist yet OR new file selected — show upload zone */}
+                                    {(!editing?.pricelist_url || pricelistFile) && (
+                                        <div className="relative">
+                                            <label className={`flex flex-col items-center justify-center gap-2 w-full border-2 border-dashed rounded-xl px-4 py-4 cursor-pointer transition
+                                                ${pricelistFile
+                                                    ? 'border-indigo-300 bg-indigo-50/40'
+                                                    : 'border-gray-200 hover:border-indigo-300 hover:bg-indigo-50/30'}`}>
+                                                <svg className={`w-6 h-6 ${pricelistFile ? 'text-indigo-400' : 'text-gray-300'}`}
+                                                    fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                                                </svg>
+                                                <div className="text-center">
+                                                    <p className={`text-sm font-medium ${pricelistFile ? 'text-indigo-600' : 'text-gray-500'}`}>
+                                                        {pricelistFile ? pricelistFile.name : 'Upload file lokal (preview saja)'}
+                                                    </p>
+                                                    <p className="text-xs text-gray-400 mt-0.5">
+                                                        {pricelistFile ? 'Klik Simpan untuk upload' : 'JPG, PNG, atau PDF · Maks 5MB'}
+                                                    </p>
+                                                </div>
+                                                {pricelistFile && (
+                                                    <button type="button" onClick={e => { e.preventDefault(); setPricelistFile(null); }}
+                                                        className="text-xs text-red-400 hover:text-red-600 underline">Batalkan</button>
+                                                )}
+                                                <input type="file" accept=".jpg,.jpeg,.png,.pdf" className="absolute inset-0 opacity-0 cursor-pointer"
+                                                    onChange={e => setPricelistFile(e.target.files[0] || null)} />
+                                            </label>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
