@@ -122,17 +122,18 @@ class ProcessWhatsAppMessage
             $aiReply  = $result['reply'];
             $leadData = $result['leadData'];
 
+            $currentContext   = $customer->ai_context ?? [];
+            $pricelistAlready = ! empty($currentContext['pricelist_sent']);
+
             if ($leadData && ! empty($leadData['nama'])) {
                 $customer->update(['nama' => $leadData['nama'], 'status' => 'interested']);
 
-                // Persist collected data so AI remembers it in future sessions
-                $newContext = array_merge($customer->ai_context ?? [], array_filter([
+                $newContext = array_merge($currentContext, array_filter([
                     'nama'    => $leadData['nama']    ?? null,
                     'tanggal' => $leadData['tanggal'] ?? null,
                     'acara'   => $leadData['acara']   ?? null,
                     'lokasi'  => $leadData['lokasi']  ?? null,
                 ]));
-                $customer->update(['ai_context' => $newContext]);
 
                 if (! empty($leadData['tanggal'])) {
                     Booking::updateOrCreate(
@@ -145,13 +146,31 @@ class ProcessWhatsAppMessage
                     );
                 }
 
-                $pricelistUrl = url('images/pricelist.jpg');
-                $waService->sendImage($waId, $pricelistUrl, "Berikut pricelist kami, apabila ada pertanyaan silakan yaa kak☺️");
-                ChatHistory::create(['customer_id' => $customer->id, 'role' => 'assistant', 'content' => '[Pricelist dikirim]']);
+                // Only send pricelist once — skip if already sent in a previous session
+                if (! $pricelistAlready) {
+                    $newContext['pricelist_sent'] = true;
+                    $customer->update(['ai_context' => $newContext]);
+
+                    // Send AI text first (it summarises the collected data), then pricelist image
+                    if (! empty(trim($aiReply))) {
+                        $waService->sendText($waId, $aiReply);
+                        ChatHistory::create(['customer_id' => $customer->id, 'role' => 'assistant', 'content' => $aiReply]);
+                    }
+
+                    $pricelistUrl = url('images/pricelist.jpg');
+                    $waService->sendImage($waId, $pricelistUrl, "Berikut pricelist kami, apabila ada pertanyaan silakan yaa kak☺️");
+                    ChatHistory::create(['customer_id' => $customer->id, 'role' => 'assistant', 'content' => '[Pricelist dikirim]']);
+                    return; // done — don't send aiReply again below
+                }
+
+                $customer->update(['ai_context' => $newContext]);
             }
 
-            $waService->sendText($waId, $aiReply);
-            ChatHistory::create(['customer_id' => $customer->id, 'role' => 'assistant', 'content' => $aiReply]);
+            // Normal reply (no pricelist triggered, or pricelist already sent before)
+            if (! empty(trim($aiReply))) {
+                $waService->sendText($waId, $aiReply);
+                ChatHistory::create(['customer_id' => $customer->id, 'role' => 'assistant', 'content' => $aiReply]);
+            }
 
         } catch (Throwable $e) {
             logger()->error('WhatsApp job error', ['message' => $e->getMessage(), 'trace' => $e->getTraceAsString(), 'wa_id' => $waId]);
